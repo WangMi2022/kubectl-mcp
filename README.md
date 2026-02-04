@@ -156,6 +156,162 @@ curl -X POST http://localhost:8080/tool \
   }'
 ```
 
+### 反向查询示例：已知 NodePort 端口号查询 Service 和 Deployment
+
+**场景**：你知道某个服务暴露在 NodePort 30080，需要找到对应的 Service 和 Deployment。
+
+**步骤 1：通过 NodePort 反向查找 Service**
+
+```bash
+curl -X POST http://localhost:8080/tool \
+  -H "Content-Type: application/json" \
+  -d '{
+    "tool": "find_service_by_nodeport",
+    "arguments": {
+      "nodePort": 30080,
+      "includeEndpoints": true
+    }
+  }'
+```
+
+**响应示例：**
+
+```json
+{
+  "success": true,
+  "data": {
+    "service": {
+      "name": "nginx-service",
+      "namespace": "production",
+      "type": "NodePort",
+      "port": 80,
+      "targetPort": 8080,
+      "nodePort": 30080,
+      "selector": {
+        "app": "nginx"
+      }
+    },
+    "endpoints": [
+      {
+        "podName": "nginx-deployment-7d64c8d5f9-abc12",
+        "podIP": "10.244.1.5",
+        "port": 8080
+      },
+      {
+        "podName": "nginx-deployment-7d64c8d5f9-def45",
+        "podIP": "10.244.2.10",
+        "port": 8080
+      }
+    ]
+  }
+}
+```
+
+**步骤 2：通过 Service selector 反向查找 Deployment**
+
+```bash
+curl -X POST http://localhost:8080/tool \
+  -H "Content-Type: application/json" \
+  -d '{
+    "tool": "find_workload_by_service",
+    "arguments": {
+      "serviceName": "nginx-service",
+      "namespace": "production",
+      "includeEndpoints": true
+    }
+  }'
+```
+
+**响应示例：**
+
+```json
+{
+  "success": true,
+  "data": {
+    "workloads": [
+      {
+        "kind": "Deployment",
+        "name": "nginx-deployment",
+        "namespace": "production",
+        "replicas": 2,
+        "readyReplicas": 2,
+        "image": "nginx:1.21",
+        "selector": {
+          "app": "nginx"
+        }
+      }
+    ],
+    "endpoints": [
+      {
+        "podName": "nginx-deployment-7d64c8d5f9-abc12",
+        "podIP": "10.244.1.5",
+        "port": 8080
+      },
+      {
+        "podName": "nginx-deployment-7d64c8d5f9-def45",
+        "podIP": "10.244.2.10",
+        "port": 8080
+      }
+    ]
+  }
+}
+```
+
+**一步到位：完整链路追踪**
+
+或者使用 `trace_by_nodeport` 工具一次性获取完整链路（NodePort → Service → Workload）：
+
+```bash
+curl -X POST http://localhost:8080/tool \
+  -H "Content-Type: application/json" \
+  -d '{
+    "tool": "trace_by_nodeport",
+    "arguments": {
+      "nodePort": 30080
+    }
+  }'
+```
+
+**响应示例：**
+
+```json
+{
+  "success": true,
+  "data": {
+    "nodePort": 30080,
+    "service": {
+      "name": "nginx-service",
+      "namespace": "production",
+      "type": "NodePort",
+      "port": 80,
+      "targetPort": 8080
+    },
+    "workloads": [
+      {
+        "kind": "Deployment",
+        "name": "nginx-deployment",
+        "namespace": "production",
+        "replicas": 2,
+        "readyReplicas": 2,
+        "image": "nginx:1.21"
+      }
+    ],
+    "endpoints": [
+      {
+        "podName": "nginx-deployment-7d64c8d5f9-abc12",
+        "podIP": "10.244.1.5",
+        "port": 8080
+      },
+      {
+        "podName": "nginx-deployment-7d64c8d5f9-def45",
+        "podIP": "10.244.2.10",
+        "port": 8080
+      }
+    ]
+  }
+}
+```
+
 ## API 接口
 
 kubectl-mcp 提供 RESTful HTTP API 接口，支持 POST 和 GET 方法。
@@ -204,7 +360,7 @@ Authorization: Bearer <api-token>
         "labels": {
           "app": "nginx"
         },
-        "createdAt": "2024-01-20T10:30:00Z"
+        "createdAt": "2026-02-04T10:30:00Z"
       }
     ]
   },
@@ -1271,7 +1427,7 @@ spec:
 
 ## 更新日志
 
-### v1.0.0 (2024-01-20)
+### v1.0.0 (2026-02-04)
 
 **新特性：**
 - ✅ 完整的 Kubernetes CRUD 操作支持
@@ -1324,9 +1480,9 @@ spec:
 
 ## 社区与支持
 
-- **问题反馈**：[GitHub Issues](https://github.com/your-org/kubectl-mcp/issues)
-- **功能建议**：[GitHub Discussions](https://github.com/your-org/kubectl-mcp/discussions)
-- **安全漏洞**：请发送邮件至 security@example.com
+- **问题反馈**：[GitHub Issues](https://github.com/wangyufeng1995/kubectl-mcp/issues)
+- **功能建议**：[GitHub Discussions](https://github.com/wangyufeng1995/kubectl-mcp/discussions)
+- **安全漏洞**：请发送邮件至 wangyufeng@yunlizhihui.com
 
 ## 致谢
 
@@ -1349,3 +1505,4 @@ spec:
 ---
 
 **Made with ❤️ by the kubectl-mcp team**
+
