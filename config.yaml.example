@@ -1,0 +1,28 @@
+# kubectl-mcp 服务器配置示例
+# 复制此文件为 config.yaml 并根据需要修改
+
+# HTTP 服务器配置
+host: "0.0.0.0"
+port: 8000
+
+# Kubeconfig 配置
+kubeconfigPath: "~/.kube/config"
+defaultContext: ""
+
+# 日志配置
+logLevel: "info"      # debug, info, warn, error
+logFormat: "json"     # json, text
+logFile: ""           # 留空则输出到 stdout
+
+# 性能配置
+maxConcurrentRequests: 100
+requestTimeout: "30s"
+
+# 安全配置
+apiToken: ""          # API 认证 Token，留空则不启用认证
+allowedOrigins:
+  - "*"
+
+# 缓存配置
+enableCache: true
+cacheTTL: "5m"
