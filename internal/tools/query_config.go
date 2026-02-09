@@ -10,7 +10,17 @@ import (
 
 // GetConfigMaps 查询 ConfigMap 列表
 func GetConfigMaps(ctx context.Context, args map[string]interface{}, k8sClient *k8s.K8SClientManager) (interface{}, error) {
-	contextName, namespace, _ := getContextAndNamespace(args, k8sClient)
+	contextName := ""
+	if ctx, ok := args["context"].(string); ok && ctx != "" {
+		contextName = ctx
+	}
+
+	// 只有用户明确指定 namespace 时才使用，否则搜索所有命名空间
+	namespace := ""
+	if ns, ok := args["namespace"].(string); ok && ns != "" {
+		namespace = ns
+	}
+
 	labelSelector := buildLabelSelector(args)
 
 	nameFilter := ""
@@ -31,6 +41,7 @@ func GetConfigMaps(ctx context.Context, args map[string]interface{}, k8sClient *
 		listOptions.FieldSelector = fmt.Sprintf("metadata.name=%s", nameFilter)
 	}
 
+	// 如果用户没有指定 namespace，搜索所有命名空间
 	if namespace == "" {
 		namespace = metav1.NamespaceAll
 	}
@@ -62,7 +73,17 @@ func GetConfigMaps(ctx context.Context, args map[string]interface{}, k8sClient *
 
 // GetSecrets 查询 Secret 列表（脱敏处理）
 func GetSecrets(ctx context.Context, args map[string]interface{}, k8sClient *k8s.K8SClientManager) (interface{}, error) {
-	contextName, namespace, _ := getContextAndNamespace(args, k8sClient)
+	contextName := ""
+	if ctx, ok := args["context"].(string); ok && ctx != "" {
+		contextName = ctx
+	}
+
+	// 只有用户明确指定 namespace 时才使用，否则搜索所有命名空间
+	namespace := ""
+	if ns, ok := args["namespace"].(string); ok && ns != "" {
+		namespace = ns
+	}
+
 	labelSelector := buildLabelSelector(args)
 
 	nameFilter := ""
@@ -83,6 +104,7 @@ func GetSecrets(ctx context.Context, args map[string]interface{}, k8sClient *k8s
 		listOptions.FieldSelector = fmt.Sprintf("metadata.name=%s", nameFilter)
 	}
 
+	// 如果用户没有指定 namespace，搜索所有命名空间
 	if namespace == "" {
 		namespace = metav1.NamespaceAll
 	}

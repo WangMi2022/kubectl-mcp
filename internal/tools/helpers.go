@@ -124,6 +124,14 @@ func getTotalRestarts(pod *corev1.Pod) int32 {
 	return restarts
 }
 
+// isVerbose 从参数中获取 verbose 标志，默认 false（精简模式）
+func isVerbose(args map[string]interface{}) bool {
+	if v, ok := args["verbose"].(bool); ok {
+		return v
+	}
+	return false
+}
+
 // getClientSet 获取 Kubernetes 客户端
 func getClientSet(contextName string, k8sClient *k8s.K8SClientManager) (*k8s.ClientSet, error) {
 	if contextName != "" {

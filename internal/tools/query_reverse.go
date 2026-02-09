@@ -19,9 +19,9 @@ type IngressInfo struct {
 	Namespace   string            `json:"namespace"`
 	Hosts       []string          `json:"hosts"`
 	Paths       []IngressPathInfo `json:"paths"`
-	Labels      map[string]string `json:"labels"`
+	Labels      map[string]string `json:"labels,omitempty"`
 	Annotations map[string]string `json:"annotations,omitempty"`
-	CreatedAt   string            `json:"createdAt"`
+	CreatedAt   string            `json:"createdAt,omitempty"`
 }
 
 // IngressPathInfo Ingress 路径信息
@@ -75,9 +75,9 @@ type WorkloadInfo struct {
 	Replicas      int32             `json:"replicas,omitempty"`
 	ReadyReplicas int32             `json:"readyReplicas,omitempty"`
 	Images        []string          `json:"images"`
-	Labels        map[string]string `json:"labels"`
-	Selector      map[string]string `json:"selector"`
-	CreatedAt     string            `json:"createdAt"`
+	Labels        map[string]string `json:"labels,omitempty"`
+	Selector      map[string]string `json:"selector,omitempty"`
+	CreatedAt     string            `json:"createdAt,omitempty"`
 }
 
 // ReverseWorkloadResult 反向查找工作负载结果
@@ -107,6 +107,7 @@ type FullTraceResult struct {
 // FindServiceByNodePort 通过 NodePort 端口号查找 Service
 func FindServiceByNodePort(ctx context.Context, args map[string]interface{}, k8sClient *k8s.K8SClientManager) (interface{}, error) {
 	contextName, _, _ := getContextAndNamespace(args, k8sClient)
+	verbose := isVerbose(args)
 
 	// 显式获取 namespace 参数，如果没有传则查询所有 namespace
 	namespace := ""
@@ -199,16 +200,19 @@ func FindServiceByNodePort(ctx context.Context, args map[string]interface{}, k8s
 
 		svcInfo := ServiceInfoWithEndpoints{
 			ServiceInfo: ServiceInfo{
-				Name:       svc.Name,
-				Namespace:  svc.Namespace,
-				Type:       string(svc.Spec.Type),
-				ClusterIP:  svc.Spec.ClusterIP,
-				ExternalIP: externalIP,
-				Ports:      ports,
-				Labels:     svc.Labels,
-				Selector:   svc.Spec.Selector,
-				CreatedAt:  svc.CreationTimestamp.Time,
+				Name:      svc.Name,
+				Namespace: svc.Namespace,
+				Type:      string(svc.Spec.Type),
+				ClusterIP: svc.Spec.ClusterIP,
+				Ports:     ports,
 			},
+		}
+
+		if verbose {
+			svcInfo.ExternalIP = externalIP
+			svcInfo.Labels = svc.Labels
+			svcInfo.Selector = svc.Spec.Selector
+			svcInfo.CreatedAt = svc.CreationTimestamp.Time
 		}
 
 		// 获取 Endpoints
@@ -243,6 +247,7 @@ func FindServiceByNodePort(ctx context.Context, args map[string]interface{}, k8s
 func GetIngresses(ctx context.Context, args map[string]interface{}, k8sClient *k8s.K8SClientManager) (interface{}, error) {
 	contextName, namespace, _ := getContextAndNamespace(args, k8sClient)
 	labelSelector := buildLabelSelector(args)
+	verbose := isVerbose(args)
 
 	nameFilter := ""
 	if name, ok := args["name"].(string); ok {
@@ -306,15 +311,20 @@ func GetIngresses(ctx context.Context, args map[string]interface{}, k8sClient *k
 			}
 		}
 
-		result = append(result, IngressInfo{
-			Name:        ing.Name,
-			Namespace:   ing.Namespace,
-			Hosts:       hosts,
-			Paths:       paths,
-			Labels:      ing.Labels,
-			Annotations: ing.Annotations,
-			CreatedAt:   ing.CreationTimestamp.Format("2006-01-02T15:04:05Z"),
-		})
+		ingInfo := IngressInfo{
+			Name:      ing.Name,
+			Namespace: ing.Namespace,
+			Hosts:     hosts,
+			Paths:     paths,
+		}
+
+		if verbose {
+			ingInfo.Labels = ing.Labels
+			ingInfo.Annotations = ing.Annotations
+			ingInfo.CreatedAt = ing.CreationTimestamp.Format("2006-01-02T15:04:05Z")
+		}
+
+		result = append(result, ingInfo)
 	}
 
 	return result, nil
@@ -323,6 +333,7 @@ func GetIngresses(ctx context.Context, args map[string]interface{}, k8sClient *k
 // FindServiceByIngress 通过 Ingress 域名查找 Service
 func FindServiceByIngress(ctx context.Context, args map[string]interface{}, k8sClient *k8s.K8SClientManager) (interface{}, error) {
 	contextName, namespace, _ := getContextAndNamespace(args, k8sClient)
+	verbose := isVerbose(args)
 
 	// 获取 host 参数
 	host, ok := args["host"].(string)
@@ -409,16 +420,19 @@ func FindServiceByIngress(ctx context.Context, args map[string]interface{}, k8sC
 
 		svcInfo := ServiceInfoWithEndpoints{
 			ServiceInfo: ServiceInfo{
-				Name:       svc.Name,
-				Namespace:  svc.Namespace,
-				Type:       string(svc.Spec.Type),
-				ClusterIP:  svc.Spec.ClusterIP,
-				ExternalIP: getExternalIP(svc),
-				Ports:      ports,
-				Labels:     svc.Labels,
-				Selector:   svc.Spec.Selector,
-				CreatedAt:  svc.CreationTimestamp.Time,
+				Name:      svc.Name,
+				Namespace: svc.Namespace,
+				Type:      string(svc.Spec.Type),
+				ClusterIP: svc.Spec.ClusterIP,
+				Ports:     ports,
 			},
+		}
+
+		if verbose {
+			svcInfo.ExternalIP = getExternalIP(svc)
+			svcInfo.Labels = svc.Labels
+			svcInfo.Selector = svc.Spec.Selector
+			svcInfo.CreatedAt = svc.CreationTimestamp.Time
 		}
 
 		// 获取 Endpoints
@@ -448,6 +462,7 @@ func FindServiceByIngress(ctx context.Context, args map[string]interface{}, k8sC
 // FindWorkloadByService 通过 Service 查找对应的工作负载
 func FindWorkloadByService(ctx context.Context, args map[string]interface{}, k8sClient *k8s.K8SClientManager) (interface{}, error) {
 	contextName, namespace, _ := getContextAndNamespace(args, k8sClient)
+	verbose := isVerbose(args)
 
 	// 获取 Service 名称
 	serviceName, ok := args["serviceName"].(string)
@@ -506,17 +521,20 @@ func FindWorkloadByService(ctx context.Context, args map[string]interface{}, k8s
 				for _, c := range deploy.Spec.Template.Spec.Containers {
 					images = append(images, c.Image)
 				}
-				workloads = append(workloads, WorkloadInfo{
+				w := WorkloadInfo{
 					Kind:          "Deployment",
 					Name:          deploy.Name,
 					Namespace:     deploy.Namespace,
 					Replicas:      *deploy.Spec.Replicas,
 					ReadyReplicas: deploy.Status.ReadyReplicas,
 					Images:        images,
-					Labels:        deploy.Labels,
-					Selector:      deploy.Spec.Selector.MatchLabels,
-					CreatedAt:     deploy.CreationTimestamp.Format("2006-01-02T15:04:05Z"),
-				})
+				}
+				if verbose {
+					w.Labels = deploy.Labels
+					w.Selector = deploy.Spec.Selector.MatchLabels
+					w.CreatedAt = deploy.CreationTimestamp.Format("2006-01-02T15:04:05Z")
+				}
+				workloads = append(workloads, w)
 			}
 		}
 	}
@@ -530,17 +548,20 @@ func FindWorkloadByService(ctx context.Context, args map[string]interface{}, k8s
 				for _, c := range sts.Spec.Template.Spec.Containers {
 					images = append(images, c.Image)
 				}
-				workloads = append(workloads, WorkloadInfo{
+				w := WorkloadInfo{
 					Kind:          "StatefulSet",
 					Name:          sts.Name,
 					Namespace:     sts.Namespace,
 					Replicas:      *sts.Spec.Replicas,
 					ReadyReplicas: sts.Status.ReadyReplicas,
 					Images:        images,
-					Labels:        sts.Labels,
-					Selector:      sts.Spec.Selector.MatchLabels,
-					CreatedAt:     sts.CreationTimestamp.Format("2006-01-02T15:04:05Z"),
-				})
+				}
+				if verbose {
+					w.Labels = sts.Labels
+					w.Selector = sts.Spec.Selector.MatchLabels
+					w.CreatedAt = sts.CreationTimestamp.Format("2006-01-02T15:04:05Z")
+				}
+				workloads = append(workloads, w)
 			}
 		}
 	}
@@ -554,17 +575,20 @@ func FindWorkloadByService(ctx context.Context, args map[string]interface{}, k8s
 				for _, c := range ds.Spec.Template.Spec.Containers {
 					images = append(images, c.Image)
 				}
-				workloads = append(workloads, WorkloadInfo{
+				w := WorkloadInfo{
 					Kind:          "DaemonSet",
 					Name:          ds.Name,
 					Namespace:     ds.Namespace,
 					Replicas:      ds.Status.DesiredNumberScheduled,
 					ReadyReplicas: ds.Status.NumberReady,
 					Images:        images,
-					Labels:        ds.Labels,
-					Selector:      ds.Spec.Selector.MatchLabels,
-					CreatedAt:     ds.CreationTimestamp.Format("2006-01-02T15:04:05Z"),
-				})
+				}
+				if verbose {
+					w.Labels = ds.Labels
+					w.Selector = ds.Spec.Selector.MatchLabels
+					w.CreatedAt = ds.CreationTimestamp.Format("2006-01-02T15:04:05Z")
+				}
+				workloads = append(workloads, w)
 			}
 		}
 	}
@@ -840,6 +864,7 @@ func getBoolArg(args map[string]interface{}, key string, defaultValue bool) bool
 // TraceByNodePort 通过 NodePort 追踪完整链路 (NodePort → Service → Workload)
 func TraceByNodePort(ctx context.Context, args map[string]interface{}, k8sClient *k8s.K8SClientManager) (interface{}, error) {
 	contextName, _, _ := getContextAndNamespace(args, k8sClient)
+	verbose := isVerbose(args)
 
 	// 显式获取 namespace 参数，如果没有传则查询所有 namespace
 	namespace := ""
@@ -925,25 +950,29 @@ func TraceByNodePort(ctx context.Context, args map[string]interface{}, k8sClient
 
 		svcInfo := ServiceInfoWithEndpoints{
 			ServiceInfo: ServiceInfo{
-				Name:       svc.Name,
-				Namespace:  svc.Namespace,
-				Type:       string(svc.Spec.Type),
-				ClusterIP:  svc.Spec.ClusterIP,
-				ExternalIP: getExternalIP(svc),
-				Ports:      ports,
-				Labels:     svc.Labels,
-				Selector:   svc.Spec.Selector,
-				CreatedAt:  svc.CreationTimestamp.Time,
+				Name:      svc.Name,
+				Namespace: svc.Namespace,
+				Type:      string(svc.Spec.Type),
+				ClusterIP: svc.Spec.ClusterIP,
+				Ports:     ports,
 			},
 			Endpoints: getServiceEndpoints(ctx, clientset, svc.Namespace, svc.Name),
 		}
+
+		if verbose {
+			svcInfo.ExternalIP = getExternalIP(svc)
+			svcInfo.Labels = svc.Labels
+			svcInfo.Selector = svc.Spec.Selector
+			svcInfo.CreatedAt = svc.CreationTimestamp.Time
+		}
+
 		matchedServices = append(matchedServices, svcInfo)
 
 		traceChain = append(traceChain, fmt.Sprintf("NodePort:%d → Service:%s/%s", nodePort, svc.Namespace, svc.Name))
 
 		// Step 2: 查找关联的 Workload
 		if len(svc.Spec.Selector) > 0 {
-			workloads := findWorkloadsForService(ctx, clientset, svc.Namespace, svc.Spec.Selector)
+			workloads := findWorkloadsForService(ctx, clientset, svc.Namespace, svc.Spec.Selector, verbose)
 			for _, w := range workloads {
 				allWorkloads = append(allWorkloads, w)
 				traceChain = append(traceChain, fmt.Sprintf("Service:%s/%s → %s:%s/%s", svc.Namespace, svc.Name, w.Kind, w.Namespace, w.Name))
@@ -970,6 +999,7 @@ func TraceByNodePort(ctx context.Context, args map[string]interface{}, k8sClient
 // TraceByHost 通过域名追踪完整链路 (Host → Ingress → Service → Workload)
 func TraceByHost(ctx context.Context, args map[string]interface{}, k8sClient *k8s.K8SClientManager) (interface{}, error) {
 	contextName, namespace, _ := getContextAndNamespace(args, k8sClient)
+	verbose := isVerbose(args)
 
 	// 获取 host 参数
 	host, ok := args["host"].(string)
@@ -1064,15 +1094,18 @@ func TraceByHost(ctx context.Context, args map[string]interface{}, k8sClient *k8
 		}
 
 		if ingMatched {
-			matchedIngresses = append(matchedIngresses, IngressInfo{
-				Name:        ing.Name,
-				Namespace:   ing.Namespace,
-				Hosts:       hosts,
-				Paths:       paths,
-				Labels:      ing.Labels,
-				Annotations: ing.Annotations,
-				CreatedAt:   ing.CreationTimestamp.Format("2006-01-02T15:04:05Z"),
-			})
+			ingInfo := IngressInfo{
+				Name:      ing.Name,
+				Namespace: ing.Namespace,
+				Hosts:     hosts,
+				Paths:     paths,
+			}
+			if verbose {
+				ingInfo.Labels = ing.Labels
+				ingInfo.Annotations = ing.Annotations
+				ingInfo.CreatedAt = ing.CreationTimestamp.Format("2006-01-02T15:04:05Z")
+			}
+			matchedIngresses = append(matchedIngresses, ingInfo)
 		}
 	}
 
@@ -1099,23 +1132,27 @@ func TraceByHost(ctx context.Context, args map[string]interface{}, k8sClient *k8
 
 		svcInfo := ServiceInfoWithEndpoints{
 			ServiceInfo: ServiceInfo{
-				Name:       svc.Name,
-				Namespace:  svc.Namespace,
-				Type:       string(svc.Spec.Type),
-				ClusterIP:  svc.Spec.ClusterIP,
-				ExternalIP: getExternalIP(svc),
-				Ports:      ports,
-				Labels:     svc.Labels,
-				Selector:   svc.Spec.Selector,
-				CreatedAt:  svc.CreationTimestamp.Time,
+				Name:      svc.Name,
+				Namespace: svc.Namespace,
+				Type:      string(svc.Spec.Type),
+				ClusterIP: svc.Spec.ClusterIP,
+				Ports:     ports,
 			},
 			Endpoints: getServiceEndpoints(ctx, clientset, svc.Namespace, svc.Name),
 		}
+
+		if verbose {
+			svcInfo.ExternalIP = getExternalIP(svc)
+			svcInfo.Labels = svc.Labels
+			svcInfo.Selector = svc.Spec.Selector
+			svcInfo.CreatedAt = svc.CreationTimestamp.Time
+		}
+
 		matchedServices = append(matchedServices, svcInfo)
 
 		// Step 3: 查找关联的 Workload
 		if len(svc.Spec.Selector) > 0 {
-			workloads := findWorkloadsForService(ctx, clientset, svc.Namespace, svc.Spec.Selector)
+			workloads := findWorkloadsForService(ctx, clientset, svc.Namespace, svc.Spec.Selector, verbose)
 			for _, w := range workloads {
 				allWorkloads = append(allWorkloads, w)
 				traceChain = append(traceChain, fmt.Sprintf("Service:%s/%s → %s:%s/%s", svc.Namespace, svc.Name, w.Kind, w.Namespace, w.Name))
@@ -1141,7 +1178,7 @@ func TraceByHost(ctx context.Context, args map[string]interface{}, k8sClient *k8
 }
 
 // findWorkloadsForService 查找与 Service selector 匹配的工作负载
-func findWorkloadsForService(ctx context.Context, clientset *k8s.ClientSet, namespace string, selector map[string]string) []WorkloadInfo {
+func findWorkloadsForService(ctx context.Context, clientset *k8s.ClientSet, namespace string, selector map[string]string, verbose bool) []WorkloadInfo {
 	workloads := make([]WorkloadInfo, 0)
 
 	// 查找 Deployment
@@ -1157,17 +1194,20 @@ func findWorkloadsForService(ctx context.Context, clientset *k8s.ClientSet, name
 				if deploy.Spec.Replicas != nil {
 					replicas = *deploy.Spec.Replicas
 				}
-				workloads = append(workloads, WorkloadInfo{
+				w := WorkloadInfo{
 					Kind:          "Deployment",
 					Name:          deploy.Name,
 					Namespace:     deploy.Namespace,
 					Replicas:      replicas,
 					ReadyReplicas: deploy.Status.ReadyReplicas,
 					Images:        images,
-					Labels:        deploy.Labels,
-					Selector:      deploy.Spec.Selector.MatchLabels,
-					CreatedAt:     deploy.CreationTimestamp.Format("2006-01-02T15:04:05Z"),
-				})
+				}
+				if verbose {
+					w.Labels = deploy.Labels
+					w.Selector = deploy.Spec.Selector.MatchLabels
+					w.CreatedAt = deploy.CreationTimestamp.Format("2006-01-02T15:04:05Z")
+				}
+				workloads = append(workloads, w)
 			}
 		}
 	}
@@ -1185,17 +1225,20 @@ func findWorkloadsForService(ctx context.Context, clientset *k8s.ClientSet, name
 				if sts.Spec.Replicas != nil {
 					replicas = *sts.Spec.Replicas
 				}
-				workloads = append(workloads, WorkloadInfo{
+				w := WorkloadInfo{
 					Kind:          "StatefulSet",
 					Name:          sts.Name,
 					Namespace:     sts.Namespace,
 					Replicas:      replicas,
 					ReadyReplicas: sts.Status.ReadyReplicas,
 					Images:        images,
-					Labels:        sts.Labels,
-					Selector:      sts.Spec.Selector.MatchLabels,
-					CreatedAt:     sts.CreationTimestamp.Format("2006-01-02T15:04:05Z"),
-				})
+				}
+				if verbose {
+					w.Labels = sts.Labels
+					w.Selector = sts.Spec.Selector.MatchLabels
+					w.CreatedAt = sts.CreationTimestamp.Format("2006-01-02T15:04:05Z")
+				}
+				workloads = append(workloads, w)
 			}
 		}
 	}
@@ -1209,17 +1252,20 @@ func findWorkloadsForService(ctx context.Context, clientset *k8s.ClientSet, name
 				for _, c := range ds.Spec.Template.Spec.Containers {
 					images = append(images, c.Image)
 				}
-				workloads = append(workloads, WorkloadInfo{
+				w := WorkloadInfo{
 					Kind:          "DaemonSet",
 					Name:          ds.Name,
 					Namespace:     ds.Namespace,
 					Replicas:      ds.Status.DesiredNumberScheduled,
 					ReadyReplicas: ds.Status.NumberReady,
 					Images:        images,
-					Labels:        ds.Labels,
-					Selector:      ds.Spec.Selector.MatchLabels,
-					CreatedAt:     ds.CreationTimestamp.Format("2006-01-02T15:04:05Z"),
-				})
+				}
+				if verbose {
+					w.Labels = ds.Labels
+					w.Selector = ds.Spec.Selector.MatchLabels
+					w.CreatedAt = ds.CreationTimestamp.Format("2006-01-02T15:04:05Z")
+				}
+				workloads = append(workloads, w)
 			}
 		}
 	}

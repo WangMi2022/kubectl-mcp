@@ -12,12 +12,12 @@ type NodeInfo struct {
 	Version           string            `json:"version"`
 	InternalIP        string            `json:"internalIP"`
 	ExternalIP        string            `json:"externalIP,omitempty"`
-	OS                string            `json:"os"`
-	Architecture      string            `json:"architecture"`
-	ContainerRuntime  string            `json:"containerRuntime"`
-	Labels            map[string]string `json:"labels"`
+	OS                string            `json:"os,omitempty"`
+	Architecture      string            `json:"architecture,omitempty"`
+	ContainerRuntime  string            `json:"containerRuntime,omitempty"`
+	Labels            map[string]string `json:"labels,omitempty"`
 	Taints            []string          `json:"taints,omitempty"`
-	CreatedAt         time.Time         `json:"createdAt"`
+	CreatedAt         time.Time         `json:"createdAt,omitempty"`
 	AllocatableCPU    string            `json:"allocatableCPU"`
 	AllocatableMemory string            `json:"allocatableMemory"`
 }
@@ -26,8 +26,8 @@ type NodeInfo struct {
 type NamespaceInfo struct {
 	Name      string            `json:"name"`
 	Status    string            `json:"status"`
-	Labels    map[string]string `json:"labels"`
-	CreatedAt time.Time         `json:"createdAt"`
+	Labels    map[string]string `json:"labels,omitempty"`
+	CreatedAt time.Time         `json:"createdAt,omitempty"`
 }
 
 // PodInfo Pod 信息
@@ -35,12 +35,12 @@ type PodInfo struct {
 	Name       string            `json:"name"`
 	Namespace  string            `json:"namespace"`
 	Status     string            `json:"status"`
-	Phase      string            `json:"phase"`
+	Phase      string            `json:"phase,omitempty"`
 	IP         string            `json:"ip"`
 	Node       string            `json:"node"`
-	Labels     map[string]string `json:"labels"`
+	Labels     map[string]string `json:"labels,omitempty"`
 	Containers []ContainerInfo   `json:"containers"`
-	CreatedAt  time.Time         `json:"createdAt"`
+	CreatedAt  time.Time         `json:"createdAt,omitempty"`
 	Restarts   int32             `json:"restarts"`
 }
 
@@ -59,13 +59,13 @@ type DeploymentInfo struct {
 	Namespace         string            `json:"namespace"`
 	Replicas          int32             `json:"replicas"`
 	ReadyReplicas     int32             `json:"readyReplicas"`
-	AvailableReplicas int32             `json:"availableReplicas"`
-	UpdatedReplicas   int32             `json:"updatedReplicas"`
+	AvailableReplicas int32             `json:"availableReplicas,omitempty"`
+	UpdatedReplicas   int32             `json:"updatedReplicas,omitempty"`
 	Images            []string          `json:"images"`
-	Labels            map[string]string `json:"labels"`
-	Selector          map[string]string `json:"selector"`
-	CreatedAt         time.Time         `json:"createdAt"`
-	Strategy          string            `json:"strategy"`
+	Labels            map[string]string `json:"labels,omitempty"`
+	Selector          map[string]string `json:"selector,omitempty"`
+	CreatedAt         time.Time         `json:"createdAt,omitempty"`
+	Strategy          string            `json:"strategy,omitempty"`
 }
 
 // StatefulSetInfo StatefulSet 信息
@@ -74,11 +74,11 @@ type StatefulSetInfo struct {
 	Namespace       string            `json:"namespace"`
 	Replicas        int32             `json:"replicas"`
 	ReadyReplicas   int32             `json:"readyReplicas"`
-	CurrentReplicas int32             `json:"currentReplicas"`
+	CurrentReplicas int32             `json:"currentReplicas,omitempty"`
 	Images          []string          `json:"images"`
-	Labels          map[string]string `json:"labels"`
+	Labels          map[string]string `json:"labels,omitempty"`
 	ServiceName     string            `json:"serviceName"`
-	CreatedAt       time.Time         `json:"createdAt"`
+	CreatedAt       time.Time         `json:"createdAt,omitempty"`
 }
 
 // DaemonSetInfo DaemonSet 信息
@@ -86,13 +86,13 @@ type DaemonSetInfo struct {
 	Name                   string            `json:"name"`
 	Namespace              string            `json:"namespace"`
 	DesiredNumberScheduled int32             `json:"desiredNumberScheduled"`
-	CurrentNumberScheduled int32             `json:"currentNumberScheduled"`
+	CurrentNumberScheduled int32             `json:"currentNumberScheduled,omitempty"`
 	NumberReady            int32             `json:"numberReady"`
-	NumberAvailable        int32             `json:"numberAvailable"`
+	NumberAvailable        int32             `json:"numberAvailable,omitempty"`
 	Images                 []string          `json:"images"`
-	Labels                 map[string]string `json:"labels"`
+	Labels                 map[string]string `json:"labels,omitempty"`
 	NodeSelector           map[string]string `json:"nodeSelector,omitempty"`
-	CreatedAt              time.Time         `json:"createdAt"`
+	CreatedAt              time.Time         `json:"createdAt,omitempty"`
 }
 
 // ServiceInfo Service 信息
@@ -103,9 +103,9 @@ type ServiceInfo struct {
 	ClusterIP  string            `json:"clusterIP"`
 	ExternalIP string            `json:"externalIP,omitempty"`
 	Ports      []ServicePortInfo `json:"ports"`
-	Labels     map[string]string `json:"labels"`
-	Selector   map[string]string `json:"selector"`
-	CreatedAt  time.Time         `json:"createdAt"`
+	Labels     map[string]string `json:"labels,omitempty"`
+	Selector   map[string]string `json:"selector,omitempty"`
+	CreatedAt  time.Time         `json:"createdAt,omitempty"`
 }
 
 // ServicePortInfo Service 端口信息
@@ -121,9 +121,9 @@ type ServicePortInfo struct {
 type ConfigMapInfo struct {
 	Name      string            `json:"name"`
 	Namespace string            `json:"namespace"`
-	Labels    map[string]string `json:"labels"`
+	Labels    map[string]string `json:"labels,omitempty"`
 	DataKeys  []string          `json:"dataKeys"`
-	CreatedAt time.Time         `json:"createdAt"`
+	CreatedAt time.Time         `json:"createdAt,omitempty"`
 }
 
 // SecretInfo Secret 信息（脱敏）
@@ -131,22 +131,22 @@ type SecretInfo struct {
 	Name      string            `json:"name"`
 	Namespace string            `json:"namespace"`
 	Type      string            `json:"type"`
-	Labels    map[string]string `json:"labels"`
+	Labels    map[string]string `json:"labels,omitempty"`
 	DataKeys  []string          `json:"dataKeys"`
-	CreatedAt time.Time         `json:"createdAt"`
+	CreatedAt time.Time         `json:"createdAt,omitempty"`
 }
 
 // EventInfo 事件信息
 type EventInfo struct {
-	Name           string    `json:"name"`
+	Name           string    `json:"name,omitempty"`
 	Namespace      string    `json:"namespace"`
 	Type           string    `json:"type"`
 	Reason         string    `json:"reason"`
 	Message        string    `json:"message"`
-	Source         string    `json:"source"`
+	Source         string    `json:"source,omitempty"`
 	InvolvedObject string    `json:"involvedObject"`
 	Count          int32     `json:"count"`
-	FirstTimestamp time.Time `json:"firstTimestamp"`
+	FirstTimestamp time.Time `json:"firstTimestamp,omitempty"`
 	LastTimestamp  time.Time `json:"lastTimestamp"`
 }
 
@@ -159,7 +159,7 @@ type ResourceDetail struct {
 	Annotations map[string]string      `json:"annotations,omitempty"`
 	Spec        map[string]interface{} `json:"spec,omitempty"`
 	Status      map[string]interface{} `json:"status,omitempty"`
-	CreatedAt   time.Time              `json:"createdAt"`
+	CreatedAt   time.Time              `json:"createdAt,omitempty"`
 }
 
 // PodLogResult Pod 日志结果
@@ -189,7 +189,7 @@ type UpdateResult struct {
 	Kind      string      `json:"kind"`
 	Name      string      `json:"name"`
 	Namespace string      `json:"namespace,omitempty"`
-	Action    string      `json:"action"` // Scale, UpdateImage, Restart, Patch, Apply
+	Action    string      `json:"action"`
 	Status    string      `json:"status"`
 	Message   string      `json:"message"`
 	OldValue  string      `json:"oldValue,omitempty"`
@@ -256,4 +256,45 @@ type BatchDeleteResult struct {
 type DeleteError struct {
 	Name  string `json:"name"`
 	Error string `json:"error"`
+}
+
+// ========== 删除预检查结果 ==========
+
+// ResourceImpact 资源影响信息
+type ResourceImpact struct {
+	Type        string   `json:"type"`
+	Names       []string `json:"names"`
+	Count       int      `json:"count"`
+	Description string   `json:"description"`
+}
+
+// DeleteResourceDetail 删除预检查中的资源详细信息
+type DeleteResourceDetail struct {
+	Name              string            `json:"name"`
+	Kind              string            `json:"kind"`
+	Namespace         string            `json:"namespace"`
+	Labels            map[string]string `json:"labels,omitempty"`
+	CreatedAt         time.Time         `json:"createdAt"`
+	Replicas          int32             `json:"replicas,omitempty"`
+	ReadyReplicas     int32             `json:"readyReplicas,omitempty"`
+	DesiredScheduled  int32             `json:"desiredScheduled,omitempty"`
+	ServiceType       string            `json:"serviceType,omitempty"`
+	Selector          map[string]string `json:"selector,omitempty"`
+	RiskLevel         string            `json:"riskLevel"`
+	ImpactedResources []ResourceImpact  `json:"impactedResources,omitempty"`
+	Warnings          []string          `json:"warnings,omitempty"`
+}
+
+// PreviewDeleteResult 删除预检查结果
+type PreviewDeleteResult struct {
+	Kind              string                 `json:"kind"`
+	Namespace         string                 `json:"namespace,omitempty"`
+	LabelSelector     string                 `json:"labelSelector,omitempty"`
+	TotalCount        int                    `json:"totalCount"`
+	Resources         []DeleteResourceDetail `json:"resources"`
+	TotalRiskLevel    string                 `json:"totalRiskLevel"`
+	TotalImpactCount  int                    `json:"totalImpactCount"`
+	ConfirmationToken string                 `json:"confirmationToken"`
+	Message           string                 `json:"message"`
+	Timestamp         time.Time              `json:"timestamp"`
 }

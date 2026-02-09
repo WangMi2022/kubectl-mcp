@@ -14,6 +14,7 @@ import (
 func GetEvents(ctx context.Context, args map[string]interface{}, k8sClient *k8s.K8SClientManager) (interface{}, error) {
 	contextName, namespace, _ := getContextAndNamespace(args, k8sClient)
 	labelSelector := buildLabelSelector(args)
+	verbose := isVerbose(args)
 
 	clientset, err := getClientSet(contextName, k8sClient)
 	if err != nil {
@@ -45,17 +46,21 @@ func GetEvents(ctx context.Context, args map[string]interface{}, k8sClient *k8s.
 		involvedObject := fmt.Sprintf("%s/%s", event.InvolvedObject.Kind, event.InvolvedObject.Name)
 
 		eventInfo := EventInfo{
-			Name:           event.Name,
 			Namespace:      event.Namespace,
 			Type:           event.Type,
 			Reason:         event.Reason,
-			Message:        event.Message,
-			Source:         fmt.Sprintf("%s/%s", event.Source.Component, event.Source.Host),
+			Message:        truncateMessage(event.Message, 200),
 			InvolvedObject: involvedObject,
 			Count:          event.Count,
-			FirstTimestamp: event.FirstTimestamp.Time,
 			LastTimestamp:  event.LastTimestamp.Time,
 		}
+
+		if verbose {
+			eventInfo.Name = event.Name
+			eventInfo.Source = fmt.Sprintf("%s/%s", event.Source.Component, event.Source.Host)
+			eventInfo.FirstTimestamp = event.FirstTimestamp.Time
+		}
+
 		result = append(result, eventInfo)
 	}
 
@@ -66,7 +71,6 @@ func GetEvents(ctx context.Context, args map[string]interface{}, k8sClient *k8s.
 func GetPodLogs(ctx context.Context, args map[string]interface{}, k8sClient *k8s.K8SClientManager) (interface{}, error) {
 	contextName, namespace, _ := getContextAndNamespace(args, k8sClient)
 
-	// 获取必填参数
 	podName, ok := args["name"].(string)
 	if !ok || podName == "" {
 		return nil, fmt.Errorf("缺少必填参数: name")
@@ -76,7 +80,6 @@ func GetPodLogs(ctx context.Context, args map[string]interface{}, k8sClient *k8s
 		namespace = "default"
 	}
 
-	// 获取可选参数
 	container := ""
 	if c, ok := args["container"].(string); ok {
 		container = c

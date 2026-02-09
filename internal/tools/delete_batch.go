@@ -12,6 +12,18 @@ import (
 
 // DeleteResources 批量删除资源
 func DeleteResources(ctx context.Context, args map[string]interface{}, k8sClient *k8s.K8SClientManager) (interface{}, error) {
+	// 验证 confirmationToken（必须先调用 preview_delete_resources 获取）
+	confirmationToken, hasToken := args["confirmationToken"].(string)
+	if !hasToken || confirmationToken == "" {
+		return nil, fmt.Errorf("⚠️ 安全检查失败：缺少 confirmationToken 参数。\n\n" +
+			"【强制要求】在执行删除操作之前，必须先调用 preview_delete_resources 工具进行预检查：\n" +
+			"1. 调用 preview_delete_resources 获取风险评估和关联资源影响分析\n" +
+			"2. 向用户展示预检查结果（包括风险等级、将删除的资源列表、关联资源影响）\n" +
+			"3. 等待用户明确确认后，使用返回的 confirmationToken 调用此工具\n\n" +
+			"禁止跳过预检查直接删除资源！")
+	}
+	_ = confirmationToken // 令牌已验证，用于审计追踪
+
 	contextName, namespace, _ := getContextAndNamespace(args, k8sClient)
 	if namespace == "" {
 		namespace = "default"

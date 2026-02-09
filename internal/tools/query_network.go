@@ -13,8 +13,8 @@ import (
 func GetServices(ctx context.Context, args map[string]interface{}, k8sClient *k8s.K8SClientManager) (interface{}, error) {
 	contextName, _, _ := getContextAndNamespace(args, k8sClient)
 	labelSelector := buildLabelSelector(args)
+	verbose := isVerbose(args)
 
-	// 显式获取 namespace 参数，如果没有传则使用 NamespaceAll
 	namespace := metav1.NamespaceAll
 	if ns, ok := args["namespace"].(string); ok && ns != "" {
 		namespace = ns
@@ -56,32 +56,35 @@ func GetServices(ctx context.Context, args map[string]interface{}, k8sClient *k8
 			})
 		}
 
-		externalIP := ""
-		if len(svc.Spec.ExternalIPs) > 0 {
-			externalIP = strings.Join(svc.Spec.ExternalIPs, ",")
-		} else if len(svc.Status.LoadBalancer.Ingress) > 0 {
-			ips := make([]string, 0)
-			for _, ingress := range svc.Status.LoadBalancer.Ingress {
-				if ingress.IP != "" {
-					ips = append(ips, ingress.IP)
-				} else if ingress.Hostname != "" {
-					ips = append(ips, ingress.Hostname)
-				}
-			}
-			externalIP = strings.Join(ips, ",")
+		svcInfo := ServiceInfo{
+			Name:      svc.Name,
+			Namespace: svc.Namespace,
+			Type:      string(svc.Spec.Type),
+			ClusterIP: svc.Spec.ClusterIP,
+			Ports:     ports,
+			Selector:  svc.Spec.Selector,
 		}
 
-		svcInfo := ServiceInfo{
-			Name:       svc.Name,
-			Namespace:  svc.Namespace,
-			Type:       string(svc.Spec.Type),
-			ClusterIP:  svc.Spec.ClusterIP,
-			ExternalIP: externalIP,
-			Ports:      ports,
-			Labels:     svc.Labels,
-			Selector:   svc.Spec.Selector,
-			CreatedAt:  svc.CreationTimestamp.Time,
+		if verbose {
+			externalIP := ""
+			if len(svc.Spec.ExternalIPs) > 0 {
+				externalIP = strings.Join(svc.Spec.ExternalIPs, ",")
+			} else if len(svc.Status.LoadBalancer.Ingress) > 0 {
+				ips := make([]string, 0)
+				for _, ingress := range svc.Status.LoadBalancer.Ingress {
+					if ingress.IP != "" {
+						ips = append(ips, ingress.IP)
+					} else if ingress.Hostname != "" {
+						ips = append(ips, ingress.Hostname)
+					}
+				}
+				externalIP = strings.Join(ips, ",")
+			}
+			svcInfo.ExternalIP = externalIP
+			svcInfo.Labels = svc.Labels
+			svcInfo.CreatedAt = svc.CreationTimestamp.Time
 		}
+
 		result = append(result, svcInfo)
 	}
 

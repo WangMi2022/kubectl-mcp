@@ -26,6 +26,11 @@ func RegisterQueryTools(registry *ToolRegistry) error {
 					Type:        "string",
 					Description: "标签选择器，格式如 'key=value' 或 'key1=value1,key2=value2'",
 				},
+				"verbose": {
+					Type:        "boolean",
+					Description: "是否返回详细信息（labels、annotations、createdAt 等），默认 false 返回精简数据",
+					Default:     false,
+				},
 			},
 			Required: []string{},
 		},
@@ -52,6 +57,11 @@ func RegisterQueryTools(registry *ToolRegistry) error {
 				"labelSelector": {
 					Type:        "string",
 					Description: "标签选择器，格式如 'key=value'",
+				},
+				"verbose": {
+					Type:        "boolean",
+					Description: "是否返回详细信息（labels、createdAt 等），默认 false 返回精简数据",
+					Default:     false,
 				},
 			},
 			Required: []string{},
@@ -88,6 +98,11 @@ func RegisterQueryTools(registry *ToolRegistry) error {
 					Type:        "string",
 					Description: "标签选择器，格式如 'app=nginx' 或 'app=nginx,version=v1'",
 				},
+				"verbose": {
+					Type:        "boolean",
+					Description: "是否返回详细信息（labels、phase、createdAt 等），默认 false 返回精简数据",
+					Default:     false,
+				},
 			},
 			Required: []string{},
 		},
@@ -96,14 +111,14 @@ func RegisterQueryTools(registry *ToolRegistry) error {
 		return err
 	}
 
-	// 注册 get_pod_filter 工具 - 专门用于快速定位单个 Pod
+	// 注册 get_resource_filter 工具 - 通用资源快速定位工具
 	if err := registry.RegisterTool(&Tool{
-		Name:                 "get_pod_filter",
-		Description:          "在整个集群的所有命名空间中快速查找 Pod，返回 Pod 的详细信息和所在命名空间。支持精确匹配和模糊匹配两种模式。适用于需要快速定位特定 Pod 位置的场景，如删除操作前的查询",
+		Name:                 "get_resource_filter",
+		Description:          "在整个集群的所有命名空间中快速查找指定类型的资源，返回资源的详细信息和所在命名空间。支持精确匹配和模糊匹配两种模式。支持的资源类型：Pod、Deployment、Service、StatefulSet、DaemonSet、ConfigMap、Secret。适用于需要快速定位特定资源位置的场景，特别是删除操作前的查询确认",
 		Category:             CategoryQuery,
 		RequiresConfirmation: false,
 		RiskLevel:            "low",
-		Example:              `{"tool": "get_pod_filter", "arguments": {"name": "nginx-deployment-7d64c8d-abc123", "matchMode": "exact"}}`,
+		Example:              `{"tool": "get_resource_filter", "arguments": {"kind": "Pod", "name": "nginx-deployment-7d64c8d-abc123", "matchMode": "exact"}}`,
 		InputSchema: &InputSchema{
 			Type: "object",
 			Properties: map[string]*ParameterSchema{
@@ -111,21 +126,32 @@ func RegisterQueryTools(registry *ToolRegistry) error {
 					Type:        "string",
 					Description: "Kubernetes context 名称，不指定则使用当前 context",
 				},
+				"kind": {
+					Type:        "string",
+					Description: "资源类型（必填）。支持：Pod、Deployment、Service、StatefulSet、DaemonSet、ConfigMap、Secret",
+					Required:    true,
+					Enum:        []interface{}{"Pod", "Deployment", "Service", "StatefulSet", "DaemonSet", "ConfigMap", "Secret"},
+				},
 				"name": {
 					Type:        "string",
-					Description: "Pod 名称（必填）。根据 matchMode 参数决定匹配方式",
+					Description: "资源名称（必填）。根据 matchMode 参数决定匹配方式",
 					Required:    true,
 				},
 				"matchMode": {
 					Type:        "string",
-					Description: "匹配模式：exact(精确匹配，默认) 或 fuzzy(模糊匹配)。精确匹配用于已知完整Pod名称的场景（如删除操作），模糊匹配用于搜索相关Pod",
+					Description: "匹配模式：exact(精确匹配，默认) 或 fuzzy(模糊匹配)。精确匹配用于已知完整资源名称的场景（如删除操作前确认），模糊匹配用于搜索相关资源",
 					Default:     "exact",
 					Enum:        []interface{}{"exact", "fuzzy"},
 				},
+				"verbose": {
+					Type:        "boolean",
+					Description: "是否返回详细信息（labels、createdAt、selector 等），默认 false 返回精简数据",
+					Default:     false,
+				},
 			},
-			Required: []string{"name"},
+			Required: []string{"kind", "name"},
 		},
-		Handler: GetPodFilter,
+		Handler: GetResourceFilter,
 	}); err != nil {
 		return err
 	}
@@ -156,6 +182,11 @@ func RegisterQueryTools(registry *ToolRegistry) error {
 				"labelSelector": {
 					Type:        "string",
 					Description: "标签选择器",
+				},
+				"verbose": {
+					Type:        "boolean",
+					Description: "是否返回详细信息（labels、selector、createdAt、strategy 等），默认 false 返回精简数据",
+					Default:     false,
 				},
 			},
 			Required: []string{},
@@ -192,6 +223,11 @@ func RegisterQueryTools(registry *ToolRegistry) error {
 					Type:        "string",
 					Description: "标签选择器",
 				},
+				"verbose": {
+					Type:        "boolean",
+					Description: "是否返回详细信息（labels、createdAt 等），默认 false 返回精简数据",
+					Default:     false,
+				},
 			},
 			Required: []string{},
 		},
@@ -226,6 +262,11 @@ func RegisterQueryTools(registry *ToolRegistry) error {
 				"labelSelector": {
 					Type:        "string",
 					Description: "标签选择器",
+				},
+				"verbose": {
+					Type:        "boolean",
+					Description: "是否返回详细信息（labels、nodeSelector、createdAt 等），默认 false 返回精简数据",
+					Default:     false,
 				},
 			},
 			Required: []string{},
@@ -262,6 +303,11 @@ func RegisterQueryTools(registry *ToolRegistry) error {
 					Type:        "string",
 					Description: "标签选择器",
 				},
+				"verbose": {
+					Type:        "boolean",
+					Description: "是否返回详细信息（labels、selector、createdAt 等），默认 false 返回精简数据",
+					Default:     false,
+				},
 			},
 			Required: []string{},
 		},
@@ -297,6 +343,11 @@ func RegisterQueryTools(registry *ToolRegistry) error {
 					Type:        "string",
 					Description: "标签选择器",
 				},
+				"verbose": {
+					Type:        "boolean",
+					Description: "是否返回详细信息（labels、createdAt 等），默认 false 返回精简数据",
+					Default:     false,
+				},
 			},
 			Required: []string{},
 		},
@@ -331,6 +382,11 @@ func RegisterQueryTools(registry *ToolRegistry) error {
 				"labelSelector": {
 					Type:        "string",
 					Description: "标签选择器",
+				},
+				"verbose": {
+					Type:        "boolean",
+					Description: "是否返回详细信息（labels、createdAt 等），默认 false 返回精简数据",
+					Default:     false,
 				},
 			},
 			Required: []string{},
@@ -368,6 +424,11 @@ func RegisterQueryTools(registry *ToolRegistry) error {
 				"namespace": {
 					Type:        "string",
 					Description: "命名空间（Node 和 Namespace 类型不需要）",
+				},
+				"verbose": {
+					Type:        "boolean",
+					Description: "是否返回详细信息（完整 Spec、Status、Labels、Annotations），默认 false 返回关键字段",
+					Default:     false,
 				},
 			},
 			Required: []string{"kind", "name"},
@@ -454,6 +515,11 @@ func RegisterQueryTools(registry *ToolRegistry) error {
 					Type:        "string",
 					Description: "关联对象名称，需要与 involvedObjectKind 一起使用",
 				},
+				"verbose": {
+					Type:        "boolean",
+					Description: "是否返回详细信息（name、source、firstTimestamp、完整 message），默认 false 返回精简数据",
+					Default:     false,
+				},
 			},
 			Required: []string{},
 		},
@@ -491,6 +557,11 @@ func RegisterQueryTools(registry *ToolRegistry) error {
 					Type:        "string",
 					Description: "标签选择器",
 				},
+				"verbose": {
+					Type:        "boolean",
+					Description: "是否返回详细信息（labels、annotations、createdAt），默认 false 返回精简数据",
+					Default:     false,
+				},
 			},
 			Required: []string{},
 		},
@@ -526,6 +597,11 @@ func RegisterQueryTools(registry *ToolRegistry) error {
 				"includeEndpoints": {
 					Type:        "boolean",
 					Description: "是否包含 Endpoints 信息（Pod IP 和端口），默认 false",
+					Default:     false,
+				},
+				"verbose": {
+					Type:        "boolean",
+					Description: "是否返回详细信息（labels、selector、createdAt 等），默认 false 返回精简数据",
 					Default:     false,
 				},
 			},
@@ -575,6 +651,11 @@ func RegisterQueryTools(registry *ToolRegistry) error {
 					Description: "是否包含 Endpoints 信息（Pod IP 和端口），默认 false",
 					Default:     false,
 				},
+				"verbose": {
+					Type:        "boolean",
+					Description: "是否返回详细信息（labels、selector、createdAt 等），默认 false 返回精简数据",
+					Default:     false,
+				},
 			},
 			Required: []string{"host"},
 		},
@@ -612,6 +693,11 @@ func RegisterQueryTools(registry *ToolRegistry) error {
 					Description: "是否包含 Endpoints 信息（Pod IP 和端口），默认 false",
 					Default:     false,
 				},
+				"verbose": {
+					Type:        "boolean",
+					Description: "是否返回详细信息（labels、selector、createdAt 等），默认 false 返回精简数据",
+					Default:     false,
+				},
 			},
 			Required: []string{"serviceName"},
 		},
@@ -643,6 +729,11 @@ func RegisterQueryTools(registry *ToolRegistry) error {
 					Type:        "integer",
 					Description: "NodePort 端口号",
 					Required:    true,
+				},
+				"verbose": {
+					Type:        "boolean",
+					Description: "是否返回详细信息（labels、selector、createdAt 等），默认 false 返回精简数据",
+					Default:     false,
 				},
 			},
 			Required: []string{"nodePort"},
@@ -685,6 +776,11 @@ func RegisterQueryTools(registry *ToolRegistry) error {
 					Description: "域名匹配模式: exact, prefix, suffix, contains, wildcard, smart(默认)",
 					Default:     "smart",
 					Enum:        []interface{}{"exact", "prefix", "suffix", "contains", "wildcard", "smart"},
+				},
+				"verbose": {
+					Type:        "boolean",
+					Description: "是否返回详细信息（labels、annotations、selector、createdAt 等），默认 false 返回精简数据",
+					Default:     false,
 				},
 			},
 			Required: []string{"host"},

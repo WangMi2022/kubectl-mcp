@@ -10,8 +10,18 @@ import (
 
 // GetPods 查询 Pod 列表
 func GetPods(ctx context.Context, args map[string]interface{}, k8sClient *k8s.K8SClientManager) (interface{}, error) {
-	contextName, namespace, _ := getContextAndNamespace(args, k8sClient)
+	contextName := ""
+	if ctx, ok := args["context"].(string); ok && ctx != "" {
+		contextName = ctx
+	}
+
+	namespace := ""
+	if ns, ok := args["namespace"].(string); ok && ns != "" {
+		namespace = ns
+	}
+
 	labelSelector := buildLabelSelector(args)
+	verbose := isVerbose(args)
 
 	nameFilter := ""
 	if name, ok := args["name"].(string); ok {
@@ -57,14 +67,19 @@ func GetPods(ctx context.Context, args map[string]interface{}, k8sClient *k8s.K8
 			Name:       pod.Name,
 			Namespace:  pod.Namespace,
 			Status:     getPodStatus(&pod),
-			Phase:      string(pod.Status.Phase),
 			IP:         pod.Status.PodIP,
 			Node:       pod.Spec.NodeName,
-			Labels:     pod.Labels,
 			Containers: containers,
-			CreatedAt:  pod.CreationTimestamp.Time,
 			Restarts:   getTotalRestarts(&pod),
 		}
+
+		// verbose 模式下返回额外字段
+		if verbose {
+			podInfo.Phase = string(pod.Status.Phase)
+			podInfo.Labels = pod.Labels
+			podInfo.CreatedAt = pod.CreationTimestamp.Time
+		}
+
 		result = append(result, podInfo)
 	}
 
@@ -73,8 +88,18 @@ func GetPods(ctx context.Context, args map[string]interface{}, k8sClient *k8s.K8
 
 // GetDeployments 查询 Deployment 列表
 func GetDeployments(ctx context.Context, args map[string]interface{}, k8sClient *k8s.K8SClientManager) (interface{}, error) {
-	contextName, namespace, _ := getContextAndNamespace(args, k8sClient)
+	contextName := ""
+	if ctx, ok := args["context"].(string); ok && ctx != "" {
+		contextName = ctx
+	}
+
+	namespace := ""
+	if ns, ok := args["namespace"].(string); ok && ns != "" {
+		namespace = ns
+	}
+
 	labelSelector := buildLabelSelector(args)
+	verbose := isVerbose(args)
 
 	nameFilter := ""
 	if name, ok := args["name"].(string); ok {
@@ -116,18 +141,22 @@ func GetDeployments(ctx context.Context, args map[string]interface{}, k8sClient 
 		}
 
 		deployInfo := DeploymentInfo{
-			Name:              deploy.Name,
-			Namespace:         deploy.Namespace,
-			Replicas:          replicas,
-			ReadyReplicas:     deploy.Status.ReadyReplicas,
-			AvailableReplicas: deploy.Status.AvailableReplicas,
-			UpdatedReplicas:   deploy.Status.UpdatedReplicas,
-			Images:            images,
-			Labels:            deploy.Labels,
-			Selector:          deploy.Spec.Selector.MatchLabels,
-			CreatedAt:         deploy.CreationTimestamp.Time,
-			Strategy:          string(deploy.Spec.Strategy.Type),
+			Name:          deploy.Name,
+			Namespace:     deploy.Namespace,
+			Replicas:      replicas,
+			ReadyReplicas: deploy.Status.ReadyReplicas,
+			Images:        images,
 		}
+
+		if verbose {
+			deployInfo.AvailableReplicas = deploy.Status.AvailableReplicas
+			deployInfo.UpdatedReplicas = deploy.Status.UpdatedReplicas
+			deployInfo.Labels = deploy.Labels
+			deployInfo.Selector = deploy.Spec.Selector.MatchLabels
+			deployInfo.CreatedAt = deploy.CreationTimestamp.Time
+			deployInfo.Strategy = string(deploy.Spec.Strategy.Type)
+		}
+
 		result = append(result, deployInfo)
 	}
 
@@ -136,8 +165,18 @@ func GetDeployments(ctx context.Context, args map[string]interface{}, k8sClient 
 
 // GetStatefulSets 查询 StatefulSet 列表
 func GetStatefulSets(ctx context.Context, args map[string]interface{}, k8sClient *k8s.K8SClientManager) (interface{}, error) {
-	contextName, namespace, _ := getContextAndNamespace(args, k8sClient)
+	contextName := ""
+	if ctx, ok := args["context"].(string); ok && ctx != "" {
+		contextName = ctx
+	}
+
+	namespace := ""
+	if ns, ok := args["namespace"].(string); ok && ns != "" {
+		namespace = ns
+	}
+
 	labelSelector := buildLabelSelector(args)
+	verbose := isVerbose(args)
 
 	nameFilter := ""
 	if name, ok := args["name"].(string); ok {
@@ -179,16 +218,20 @@ func GetStatefulSets(ctx context.Context, args map[string]interface{}, k8sClient
 		}
 
 		stsInfo := StatefulSetInfo{
-			Name:            sts.Name,
-			Namespace:       sts.Namespace,
-			Replicas:        replicas,
-			ReadyReplicas:   sts.Status.ReadyReplicas,
-			CurrentReplicas: sts.Status.CurrentReplicas,
-			Images:          images,
-			Labels:          sts.Labels,
-			ServiceName:     sts.Spec.ServiceName,
-			CreatedAt:       sts.CreationTimestamp.Time,
+			Name:          sts.Name,
+			Namespace:     sts.Namespace,
+			Replicas:      replicas,
+			ReadyReplicas: sts.Status.ReadyReplicas,
+			Images:        images,
+			ServiceName:   sts.Spec.ServiceName,
 		}
+
+		if verbose {
+			stsInfo.CurrentReplicas = sts.Status.CurrentReplicas
+			stsInfo.Labels = sts.Labels
+			stsInfo.CreatedAt = sts.CreationTimestamp.Time
+		}
+
 		result = append(result, stsInfo)
 	}
 
@@ -197,8 +240,18 @@ func GetStatefulSets(ctx context.Context, args map[string]interface{}, k8sClient
 
 // GetDaemonSets 查询 DaemonSet 列表
 func GetDaemonSets(ctx context.Context, args map[string]interface{}, k8sClient *k8s.K8SClientManager) (interface{}, error) {
-	contextName, namespace, _ := getContextAndNamespace(args, k8sClient)
+	contextName := ""
+	if ctx, ok := args["context"].(string); ok && ctx != "" {
+		contextName = ctx
+	}
+
+	namespace := ""
+	if ns, ok := args["namespace"].(string); ok && ns != "" {
+		namespace = ns
+	}
+
 	labelSelector := buildLabelSelector(args)
+	verbose := isVerbose(args)
 
 	nameFilter := ""
 	if name, ok := args["name"].(string); ok {
@@ -238,14 +291,18 @@ func GetDaemonSets(ctx context.Context, args map[string]interface{}, k8sClient *
 			Name:                   ds.Name,
 			Namespace:              ds.Namespace,
 			DesiredNumberScheduled: ds.Status.DesiredNumberScheduled,
-			CurrentNumberScheduled: ds.Status.CurrentNumberScheduled,
 			NumberReady:            ds.Status.NumberReady,
-			NumberAvailable:        ds.Status.NumberAvailable,
 			Images:                 images,
-			Labels:                 ds.Labels,
-			NodeSelector:           ds.Spec.Template.Spec.NodeSelector,
-			CreatedAt:              ds.CreationTimestamp.Time,
 		}
+
+		if verbose {
+			dsInfo.CurrentNumberScheduled = ds.Status.CurrentNumberScheduled
+			dsInfo.NumberAvailable = ds.Status.NumberAvailable
+			dsInfo.Labels = ds.Labels
+			dsInfo.NodeSelector = ds.Spec.Template.Spec.NodeSelector
+			dsInfo.CreatedAt = ds.CreationTimestamp.Time
+		}
+
 		result = append(result, dsInfo)
 	}
 

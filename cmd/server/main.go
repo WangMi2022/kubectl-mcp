@@ -17,10 +17,10 @@ import (
 
 const (
 	// 服务器版本
-	Version = "1.2.4"
+	Version = "1.3.0"
 
 	// 构建时间（可通过 -ldflags 注入）
-	BuildTime = "2026-01-27"
+	BuildTime = "2026-01-30"
 
 	// 优雅关闭超时时间
 	ShutdownTimeout = 30 * time.Second
@@ -165,6 +165,11 @@ func (app *Application) initToolRegistry() (*tools.ToolRegistry, error) {
 	// 注册删除类工具
 	if err := tools.RegisterDeleteTools(registry); err != nil {
 		return nil, fmt.Errorf("注册删除类工具失败: %w", err)
+	}
+
+	// 注册巡检类工具
+	if err := tools.RegisterInspectTools(registry); err != nil {
+		return nil, fmt.Errorf("注册巡检类工具失败: %w", err)
 	}
 
 	return registry, nil

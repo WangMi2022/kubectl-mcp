@@ -67,9 +67,9 @@ USER kubectl-mcp
 # 暴露端口
 EXPOSE 8080
 
-# 健康检查
+# 健康检查 - 使用 GET 方法而非 HEAD（--spider）
 HEALTHCHECK --interval=30s --timeout=10s --start-period=10s --retries=3 \
-    CMD wget --no-verbose --tries=1 --spider http://localhost:8080/health || exit 1
+    CMD wget --no-verbose --tries=1 -O /dev/null http://localhost:8080/health || exit 1
 
 # 设置环境变量
 ENV KUBECTL_MCP_HOST=0.0.0.0 \

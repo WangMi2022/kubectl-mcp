@@ -320,20 +320,30 @@ func (s *HTTPServer) loggingMiddleware() gin.HandlerFunc {
 		startTime := time.Now()
 		path := c.Request.URL.Path
 		method := c.Request.Method
+		clientIP := c.ClientIP()
+		userAgent := c.Request.UserAgent()
+		requestID := c.GetHeader("X-Request-ID")
 
 		// 处理请求
 		c.Next()
 
-		// 记录请求日志
+		// 记录详细的请求日志
 		duration := time.Since(startTime)
 		statusCode := c.Writer.Status()
 
 		if s.auditLogger != nil {
-			_ = s.auditLogger.LogMetrics(&audit.Metrics{
+			_ = s.auditLogger.LogOperation(&audit.OperationLog{
 				Timestamp: startTime,
-				Operation: fmt.Sprintf("%s %s", method, path),
-				Duration:  duration,
+				Tool:      fmt.Sprintf("%s %s", method, path),
+				Context:   requestID,
 				Success:   statusCode < 400,
+				Duration:  duration,
+				Arguments: map[string]interface{}{
+					"client_ip":   clientIP,
+					"user_agent":  userAgent,
+					"status_code": statusCode,
+					"query":       c.Request.URL.RawQuery,
+				},
 			})
 		}
 	}

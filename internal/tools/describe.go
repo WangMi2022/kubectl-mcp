@@ -13,8 +13,8 @@ import (
 // DescribeResource 获取资源详情
 func DescribeResource(ctx context.Context, args map[string]interface{}, k8sClient *k8s.K8SClientManager) (interface{}, error) {
 	contextName, namespace, _ := getContextAndNamespace(args, k8sClient)
+	verbose := isVerbose(args)
 
-	// 获取必填参数
 	kind, ok := args["kind"].(string)
 	if !ok || kind == "" {
 		return nil, fmt.Errorf("缺少必填参数: kind")
@@ -34,102 +34,171 @@ func DescribeResource(ctx context.Context, args map[string]interface{}, k8sClien
 		namespace = "default"
 	}
 
-	// 根据资源类型获取详情
 	switch strings.ToLower(kind) {
 	case "pod":
-		return describePod(ctx, clientset, namespace, name)
+		return describePod(ctx, clientset, namespace, name, verbose)
 	case "deployment":
-		return describeDeployment(ctx, clientset, namespace, name)
+		return describeDeployment(ctx, clientset, namespace, name, verbose)
 	case "service":
-		return describeService(ctx, clientset, namespace, name)
+		return describeService(ctx, clientset, namespace, name, verbose)
 	case "configmap":
-		return describeConfigMap(ctx, clientset, namespace, name)
+		return describeConfigMap(ctx, clientset, namespace, name, verbose)
 	case "secret":
-		return describeSecret(ctx, clientset, namespace, name)
+		return describeSecret(ctx, clientset, namespace, name, verbose)
 	case "node":
-		return describeNode(ctx, clientset, name)
+		return describeNode(ctx, clientset, name, verbose)
 	case "namespace":
-		return describeNamespace(ctx, clientset, name)
+		return describeNamespace(ctx, clientset, name, verbose)
 	case "statefulset":
-		return describeStatefulSet(ctx, clientset, namespace, name)
+		return describeStatefulSet(ctx, clientset, namespace, name, verbose)
 	case "daemonset":
-		return describeDaemonSet(ctx, clientset, namespace, name)
+		return describeDaemonSet(ctx, clientset, namespace, name, verbose)
 	default:
 		return nil, fmt.Errorf("不支持的资源类型: %s", kind)
 	}
 }
 
-// describePod 获取 Pod 详情
-func describePod(ctx context.Context, clientset *k8s.ClientSet, namespace, name string) (*ResourceDetail, error) {
+func describePod(ctx context.Context, clientset *k8s.ClientSet, namespace, name string, verbose bool) (interface{}, error) {
 	pod, err := clientset.Clientset.CoreV1().Pods(namespace).Get(ctx, name, metav1.GetOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("获取 Pod '%s/%s' 详情失败: %w", namespace, name, err)
 	}
 
-	spec, _ := toMap(pod.Spec)
-	status, _ := toMap(pod.Status)
+	detail := &ResourceDetail{
+		Kind:      "Pod",
+		Name:      pod.Name,
+		Namespace: pod.Namespace,
+		CreatedAt: pod.CreationTimestamp.Time,
+	}
 
-	return &ResourceDetail{
-		Kind:        "Pod",
-		Name:        pod.Name,
-		Namespace:   pod.Namespace,
-		Labels:      pod.Labels,
-		Annotations: pod.Annotations,
-		Spec:        spec,
-		Status:      status,
-		CreatedAt:   pod.CreationTimestamp.Time,
-	}, nil
+	// 精简模式：只返回关键状态信息
+	status := map[string]interface{}{
+		"phase":  string(pod.Status.Phase),
+		"podIP":  pod.Status.PodIP,
+		"hostIP": pod.Status.HostIP,
+		"node":   pod.Spec.NodeName,
+	}
+	containers := make([]map[string]interface{}, 0)
+	for _, cs := range pod.Status.ContainerStatuses {
+		containers = append(containers, map[string]interface{}{
+			"name":         cs.Name,
+			"image":        cs.Image,
+			"ready":        cs.Ready,
+			"restartCount": cs.RestartCount,
+			"state":        getContainerState(cs),
+		})
+	}
+	status["containers"] = containers
+	detail.Status = status
+
+	if verbose {
+		detail.Labels = pod.Labels
+		detail.Annotations = pod.Annotations
+		spec, _ := toMap(pod.Spec)
+		detail.Spec = spec
+	}
+
+	return detail, nil
 }
 
-// describeDeployment 获取 Deployment 详情
-func describeDeployment(ctx context.Context, clientset *k8s.ClientSet, namespace, name string) (*ResourceDetail, error) {
+func describeDeployment(ctx context.Context, clientset *k8s.ClientSet, namespace, name string, verbose bool) (interface{}, error) {
 	deploy, err := clientset.Clientset.AppsV1().Deployments(namespace).Get(ctx, name, metav1.GetOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("获取 Deployment '%s/%s' 详情失败: %w", namespace, name, err)
 	}
 
-	spec, _ := toMap(deploy.Spec)
-	status, _ := toMap(deploy.Status)
+	replicas := int32(0)
+	if deploy.Spec.Replicas != nil {
+		replicas = *deploy.Spec.Replicas
+	}
 
-	return &ResourceDetail{
-		Kind:        "Deployment",
-		Name:        deploy.Name,
-		Namespace:   deploy.Namespace,
-		Labels:      deploy.Labels,
-		Annotations: deploy.Annotations,
-		Spec:        spec,
-		Status:      status,
-		CreatedAt:   deploy.CreationTimestamp.Time,
-	}, nil
+	images := make([]string, 0)
+	for _, c := range deploy.Spec.Template.Spec.Containers {
+		images = append(images, c.Image)
+	}
+
+	detail := &ResourceDetail{
+		Kind:      "Deployment",
+		Name:      deploy.Name,
+		Namespace: deploy.Namespace,
+		CreatedAt: deploy.CreationTimestamp.Time,
+		Status: map[string]interface{}{
+			"replicas":          replicas,
+			"readyReplicas":     deploy.Status.ReadyReplicas,
+			"availableReplicas": deploy.Status.AvailableReplicas,
+			"updatedReplicas":   deploy.Status.UpdatedReplicas,
+			"images":            images,
+			"strategy":          string(deploy.Spec.Strategy.Type),
+			"selector":          deploy.Spec.Selector.MatchLabels,
+		},
+	}
+
+	if verbose {
+		detail.Labels = deploy.Labels
+		detail.Annotations = deploy.Annotations
+		spec, _ := toMap(deploy.Spec)
+		detail.Spec = spec
+	}
+
+	return detail, nil
 }
 
-// describeService 获取 Service 详情
-func describeService(ctx context.Context, clientset *k8s.ClientSet, namespace, name string) (*ResourceDetail, error) {
+func describeService(ctx context.Context, clientset *k8s.ClientSet, namespace, name string, verbose bool) (interface{}, error) {
 	svc, err := clientset.Clientset.CoreV1().Services(namespace).Get(ctx, name, metav1.GetOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("获取 Service '%s/%s' 详情失败: %w", namespace, name, err)
 	}
 
-	spec, _ := toMap(svc.Spec)
-	status, _ := toMap(svc.Status)
+	ports := make([]map[string]interface{}, 0)
+	for _, p := range svc.Spec.Ports {
+		portInfo := map[string]interface{}{
+			"port":       p.Port,
+			"targetPort": p.TargetPort.String(),
+			"protocol":   string(p.Protocol),
+		}
+		if p.NodePort != 0 {
+			portInfo["nodePort"] = p.NodePort
+		}
+		if p.Name != "" {
+			portInfo["name"] = p.Name
+		}
+		ports = append(ports, portInfo)
+	}
 
-	return &ResourceDetail{
-		Kind:        "Service",
-		Name:        svc.Name,
-		Namespace:   svc.Namespace,
-		Labels:      svc.Labels,
-		Annotations: svc.Annotations,
-		Spec:        spec,
-		Status:      status,
-		CreatedAt:   svc.CreationTimestamp.Time,
-	}, nil
+	detail := &ResourceDetail{
+		Kind:      "Service",
+		Name:      svc.Name,
+		Namespace: svc.Namespace,
+		CreatedAt: svc.CreationTimestamp.Time,
+		Status: map[string]interface{}{
+			"type":      string(svc.Spec.Type),
+			"clusterIP": svc.Spec.ClusterIP,
+			"ports":     ports,
+			"selector":  svc.Spec.Selector,
+		},
+	}
+
+	if verbose {
+		detail.Labels = svc.Labels
+		detail.Annotations = svc.Annotations
+		spec, _ := toMap(svc.Spec)
+		detail.Spec = spec
+	}
+
+	return detail, nil
 }
 
-// describeConfigMap 获取 ConfigMap 详情
-func describeConfigMap(ctx context.Context, clientset *k8s.ClientSet, namespace, name string) (*ResourceDetail, error) {
+func describeConfigMap(ctx context.Context, clientset *k8s.ClientSet, namespace, name string, verbose bool) (interface{}, error) {
 	cm, err := clientset.Clientset.CoreV1().ConfigMaps(namespace).Get(ctx, name, metav1.GetOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("获取 ConfigMap '%s/%s' 详情失败: %w", namespace, name, err)
+	}
+
+	detail := &ResourceDetail{
+		Kind:      "ConfigMap",
+		Name:      cm.Name,
+		Namespace: cm.Namespace,
+		CreatedAt: cm.CreationTimestamp.Time,
 	}
 
 	// ConfigMap 的 Data 作为 Spec 返回
@@ -137,129 +206,176 @@ func describeConfigMap(ctx context.Context, clientset *k8s.ClientSet, namespace,
 	for k, v := range cm.Data {
 		spec[k] = v
 	}
+	detail.Spec = spec
 
-	return &ResourceDetail{
-		Kind:        "ConfigMap",
-		Name:        cm.Name,
-		Namespace:   cm.Namespace,
-		Labels:      cm.Labels,
-		Annotations: cm.Annotations,
-		Spec:        spec,
-		CreatedAt:   cm.CreationTimestamp.Time,
-	}, nil
+	if verbose {
+		detail.Labels = cm.Labels
+		detail.Annotations = cm.Annotations
+	}
+
+	return detail, nil
 }
 
-// describeSecret 获取 Secret 详情（脱敏处理）
-func describeSecret(ctx context.Context, clientset *k8s.ClientSet, namespace, name string) (*ResourceDetail, error) {
+func describeSecret(ctx context.Context, clientset *k8s.ClientSet, namespace, name string, verbose bool) (interface{}, error) {
 	secret, err := clientset.Clientset.CoreV1().Secrets(namespace).Get(ctx, name, metav1.GetOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("获取 Secret '%s/%s' 详情失败: %w", namespace, name, err)
 	}
 
-	// 脱敏处理：只返回 key 名称，不返回实际值
-	spec := make(map[string]interface{})
-	spec["type"] = string(secret.Type)
 	dataKeys := make([]string, 0, len(secret.Data))
 	for k := range secret.Data {
 		dataKeys = append(dataKeys, k)
 	}
-	spec["dataKeys"] = dataKeys
 
-	return &ResourceDetail{
-		Kind:        "Secret",
-		Name:        secret.Name,
-		Namespace:   secret.Namespace,
-		Labels:      secret.Labels,
-		Annotations: secret.Annotations,
-		Spec:        spec,
-		CreatedAt:   secret.CreationTimestamp.Time,
-	}, nil
+	detail := &ResourceDetail{
+		Kind:      "Secret",
+		Name:      secret.Name,
+		Namespace: secret.Namespace,
+		CreatedAt: secret.CreationTimestamp.Time,
+		Spec: map[string]interface{}{
+			"type":     string(secret.Type),
+			"dataKeys": dataKeys,
+		},
+	}
+
+	if verbose {
+		detail.Labels = secret.Labels
+		detail.Annotations = secret.Annotations
+	}
+
+	return detail, nil
 }
 
-// describeNode 获取 Node 详情
-func describeNode(ctx context.Context, clientset *k8s.ClientSet, name string) (*ResourceDetail, error) {
+func describeNode(ctx context.Context, clientset *k8s.ClientSet, name string, verbose bool) (interface{}, error) {
 	node, err := clientset.Clientset.CoreV1().Nodes().Get(ctx, name, metav1.GetOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("获取 Node '%s' 详情失败: %w", name, err)
 	}
 
-	spec, _ := toMap(node.Spec)
-	status, _ := toMap(node.Status)
+	detail := &ResourceDetail{
+		Kind:      "Node",
+		Name:      node.Name,
+		CreatedAt: node.CreationTimestamp.Time,
+		Status: map[string]interface{}{
+			"status":            getNodeStatus(node.Status.Conditions),
+			"roles":             getNodeRoles(node.Labels),
+			"version":           node.Status.NodeInfo.KubeletVersion,
+			"os":                node.Status.NodeInfo.OperatingSystem,
+			"architecture":      node.Status.NodeInfo.Architecture,
+			"containerRuntime":  node.Status.NodeInfo.ContainerRuntimeVersion,
+			"allocatableCPU":    node.Status.Allocatable.Cpu().String(),
+			"allocatableMemory": node.Status.Allocatable.Memory().String(),
+		},
+	}
 
-	return &ResourceDetail{
-		Kind:        "Node",
-		Name:        node.Name,
-		Labels:      node.Labels,
-		Annotations: node.Annotations,
-		Spec:        spec,
-		Status:      status,
-		CreatedAt:   node.CreationTimestamp.Time,
-	}, nil
+	if verbose {
+		detail.Labels = node.Labels
+		detail.Annotations = node.Annotations
+		spec, _ := toMap(node.Spec)
+		detail.Spec = spec
+		status, _ := toMap(node.Status)
+		detail.Status = status
+	}
+
+	return detail, nil
 }
 
-// describeNamespace 获取 Namespace 详情
-func describeNamespace(ctx context.Context, clientset *k8s.ClientSet, name string) (*ResourceDetail, error) {
+func describeNamespace(ctx context.Context, clientset *k8s.ClientSet, name string, verbose bool) (interface{}, error) {
 	ns, err := clientset.Clientset.CoreV1().Namespaces().Get(ctx, name, metav1.GetOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("获取 Namespace '%s' 详情失败: %w", name, err)
 	}
 
-	spec, _ := toMap(ns.Spec)
-	status, _ := toMap(ns.Status)
+	detail := &ResourceDetail{
+		Kind:      "Namespace",
+		Name:      ns.Name,
+		CreatedAt: ns.CreationTimestamp.Time,
+		Status: map[string]interface{}{
+			"phase": string(ns.Status.Phase),
+		},
+	}
 
-	return &ResourceDetail{
-		Kind:        "Namespace",
-		Name:        ns.Name,
-		Labels:      ns.Labels,
-		Annotations: ns.Annotations,
-		Spec:        spec,
-		Status:      status,
-		CreatedAt:   ns.CreationTimestamp.Time,
-	}, nil
+	if verbose {
+		detail.Labels = ns.Labels
+		detail.Annotations = ns.Annotations
+		spec, _ := toMap(ns.Spec)
+		detail.Spec = spec
+	}
+
+	return detail, nil
 }
 
-// describeStatefulSet 获取 StatefulSet 详情
-func describeStatefulSet(ctx context.Context, clientset *k8s.ClientSet, namespace, name string) (*ResourceDetail, error) {
+func describeStatefulSet(ctx context.Context, clientset *k8s.ClientSet, namespace, name string, verbose bool) (interface{}, error) {
 	sts, err := clientset.Clientset.AppsV1().StatefulSets(namespace).Get(ctx, name, metav1.GetOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("获取 StatefulSet '%s/%s' 详情失败: %w", namespace, name, err)
 	}
 
-	spec, _ := toMap(sts.Spec)
-	status, _ := toMap(sts.Status)
+	replicas := int32(0)
+	if sts.Spec.Replicas != nil {
+		replicas = *sts.Spec.Replicas
+	}
 
-	return &ResourceDetail{
-		Kind:        "StatefulSet",
-		Name:        sts.Name,
-		Namespace:   sts.Namespace,
-		Labels:      sts.Labels,
-		Annotations: sts.Annotations,
-		Spec:        spec,
-		Status:      status,
-		CreatedAt:   sts.CreationTimestamp.Time,
-	}, nil
+	images := make([]string, 0)
+	for _, c := range sts.Spec.Template.Spec.Containers {
+		images = append(images, c.Image)
+	}
+
+	detail := &ResourceDetail{
+		Kind:      "StatefulSet",
+		Name:      sts.Name,
+		Namespace: sts.Namespace,
+		CreatedAt: sts.CreationTimestamp.Time,
+		Status: map[string]interface{}{
+			"replicas":      replicas,
+			"readyReplicas": sts.Status.ReadyReplicas,
+			"images":        images,
+			"serviceName":   sts.Spec.ServiceName,
+		},
+	}
+
+	if verbose {
+		detail.Labels = sts.Labels
+		detail.Annotations = sts.Annotations
+		spec, _ := toMap(sts.Spec)
+		detail.Spec = spec
+	}
+
+	return detail, nil
 }
 
-// describeDaemonSet 获取 DaemonSet 详情
-func describeDaemonSet(ctx context.Context, clientset *k8s.ClientSet, namespace, name string) (*ResourceDetail, error) {
+func describeDaemonSet(ctx context.Context, clientset *k8s.ClientSet, namespace, name string, verbose bool) (interface{}, error) {
 	ds, err := clientset.Clientset.AppsV1().DaemonSets(namespace).Get(ctx, name, metav1.GetOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("获取 DaemonSet '%s/%s' 详情失败: %w", namespace, name, err)
 	}
 
-	spec, _ := toMap(ds.Spec)
-	status, _ := toMap(ds.Status)
+	images := make([]string, 0)
+	for _, c := range ds.Spec.Template.Spec.Containers {
+		images = append(images, c.Image)
+	}
 
-	return &ResourceDetail{
-		Kind:        "DaemonSet",
-		Name:        ds.Name,
-		Namespace:   ds.Namespace,
-		Labels:      ds.Labels,
-		Annotations: ds.Annotations,
-		Spec:        spec,
-		Status:      status,
-		CreatedAt:   ds.CreationTimestamp.Time,
-	}, nil
+	detail := &ResourceDetail{
+		Kind:      "DaemonSet",
+		Name:      ds.Name,
+		Namespace: ds.Namespace,
+		CreatedAt: ds.CreationTimestamp.Time,
+		Status: map[string]interface{}{
+			"desiredNumberScheduled": ds.Status.DesiredNumberScheduled,
+			"numberReady":            ds.Status.NumberReady,
+			"numberAvailable":        ds.Status.NumberAvailable,
+			"images":                 images,
+		},
+	}
+
+	if verbose {
+		detail.Labels = ds.Labels
+		detail.Annotations = ds.Annotations
+		spec, _ := toMap(ds.Spec)
+		detail.Spec = spec
+	}
+
+	return detail, nil
 }
 
 // toMap 将结构体转换为 map

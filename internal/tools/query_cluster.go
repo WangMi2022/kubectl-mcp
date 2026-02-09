@@ -13,6 +13,7 @@ import (
 func GetNodes(ctx context.Context, args map[string]interface{}, k8sClient *k8s.K8SClientManager) (interface{}, error) {
 	contextName, _, _ := getContextAndNamespace(args, k8sClient)
 	labelSelector := buildLabelSelector(args)
+	verbose := isVerbose(args)
 
 	clientset, err := getClientSet(contextName, k8sClient)
 	if err != nil {
@@ -30,7 +31,6 @@ func GetNodes(ctx context.Context, args map[string]interface{}, k8sClient *k8s.K
 
 	result := make([]NodeInfo, 0, len(nodes.Items))
 	for _, node := range nodes.Items {
-		// 获取 IP 地址
 		var internalIP, externalIP string
 		for _, addr := range node.Status.Addresses {
 			switch addr.Type {
@@ -41,28 +41,31 @@ func GetNodes(ctx context.Context, args map[string]interface{}, k8sClient *k8s.K
 			}
 		}
 
-		// 获取 taints
-		taints := make([]string, 0, len(node.Spec.Taints))
-		for _, taint := range node.Spec.Taints {
-			taints = append(taints, fmt.Sprintf("%s=%s:%s", taint.Key, taint.Value, taint.Effect))
-		}
-
 		nodeInfo := NodeInfo{
 			Name:              node.Name,
 			Status:            getNodeStatus(node.Status.Conditions),
 			Roles:             getNodeRoles(node.Labels),
 			Version:           node.Status.NodeInfo.KubeletVersion,
 			InternalIP:        internalIP,
-			ExternalIP:        externalIP,
-			OS:                node.Status.NodeInfo.OperatingSystem,
-			Architecture:      node.Status.NodeInfo.Architecture,
-			ContainerRuntime:  node.Status.NodeInfo.ContainerRuntimeVersion,
-			Labels:            node.Labels,
-			Taints:            taints,
-			CreatedAt:         node.CreationTimestamp.Time,
 			AllocatableCPU:    node.Status.Allocatable.Cpu().String(),
 			AllocatableMemory: node.Status.Allocatable.Memory().String(),
 		}
+
+		if verbose {
+			nodeInfo.ExternalIP = externalIP
+			nodeInfo.OS = node.Status.NodeInfo.OperatingSystem
+			nodeInfo.Architecture = node.Status.NodeInfo.Architecture
+			nodeInfo.ContainerRuntime = node.Status.NodeInfo.ContainerRuntimeVersion
+			nodeInfo.Labels = node.Labels
+			nodeInfo.CreatedAt = node.CreationTimestamp.Time
+
+			taints := make([]string, 0, len(node.Spec.Taints))
+			for _, taint := range node.Spec.Taints {
+				taints = append(taints, fmt.Sprintf("%s=%s:%s", taint.Key, taint.Value, taint.Effect))
+			}
+			nodeInfo.Taints = taints
+		}
+
 		result = append(result, nodeInfo)
 	}
 
@@ -73,6 +76,7 @@ func GetNodes(ctx context.Context, args map[string]interface{}, k8sClient *k8s.K
 func GetNamespaces(ctx context.Context, args map[string]interface{}, k8sClient *k8s.K8SClientManager) (interface{}, error) {
 	contextName, _, _ := getContextAndNamespace(args, k8sClient)
 	labelSelector := buildLabelSelector(args)
+	verbose := isVerbose(args)
 
 	clientset, err := getClientSet(contextName, k8sClient)
 	if err != nil {
@@ -91,11 +95,15 @@ func GetNamespaces(ctx context.Context, args map[string]interface{}, k8sClient *
 	result := make([]NamespaceInfo, 0, len(namespaces.Items))
 	for _, ns := range namespaces.Items {
 		nsInfo := NamespaceInfo{
-			Name:      ns.Name,
-			Status:    string(ns.Status.Phase),
-			Labels:    ns.Labels,
-			CreatedAt: ns.CreationTimestamp.Time,
+			Name:   ns.Name,
+			Status: string(ns.Status.Phase),
 		}
+
+		if verbose {
+			nsInfo.Labels = ns.Labels
+			nsInfo.CreatedAt = ns.CreationTimestamp.Time
+		}
+
 		result = append(result, nsInfo)
 	}
 

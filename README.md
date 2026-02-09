@@ -1505,4 +1505,3 @@ spec:
 ---
 
 **Made with ❤️ by the kubectl-mcp team**
-
