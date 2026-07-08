@@ -172,5 +172,29 @@ func RegisterInspectTools(registry *ToolRegistry) error {
 	}); err != nil {
 		return err
 	}
+
+	// 注册 inspect_pod_diagnostics 工具
+	if err := registry.RegisterTool(&Tool{
+		Name:                 "inspect_pod_diagnostics",
+		Description:          "Pod 深度诊断，只读检查 Pending/Failed/CrashLoopBackOff/ImagePullBackOff/OOMKilled、高重启与相关事件；不默认拉全量日志，必要时建议 get_pod_logs。支持 namespace、podName、labelSelector、topN",
+		Category:             CategoryQuery,
+		RequiresConfirmation: false,
+		RiskLevel:            "low",
+		Example:              `{"tool": "inspect_pod_diagnostics", "arguments": {"namespace": "default", "podName": "nginx-abc", "topN": 20}}`,
+		InputSchema: &InputSchema{
+			Type: "object",
+			Properties: map[string]*ParameterSchema{
+				"context":       {Type: "string", Description: "Kubernetes context 名称，不指定则使用当前 context"},
+				"namespace":     {Type: "string", Description: "命名空间，建议显式指定"},
+				"podName":       {Type: "string", Description: "Pod 名称；不指定则按 labelSelector 或 namespace 扫描"},
+				"labelSelector": {Type: "string", Description: "Pod 标签选择器，如 app=api"},
+				"topN":          {Type: "integer", Description: "返回 findings 上限，默认 20", Default: 20},
+			},
+			Required: []string{},
+		},
+		Handler: InspectPodDiagnostics,
+	}); err != nil {
+		return err
+	}
 	return nil
 }
