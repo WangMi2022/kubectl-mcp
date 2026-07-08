@@ -215,5 +215,23 @@ func RegisterInspectTools(registry *ToolRegistry) error {
 	}); err != nil {
 		return err
 	}
+
+	// 注册 inspect_storage_diagnostics 工具
+	if err := registry.RegisterTool(&Tool{
+		Name:                 "inspect_storage_diagnostics",
+		Description:          "存储诊断，只读检查 PVC Pending、PV Released/Failed、StorageClass 缺失，以及 FailedMount/FailedAttachVolume 事件并关联 Pod/PVC。支持 namespace、topN",
+		Category:             CategoryQuery,
+		RequiresConfirmation: false,
+		RiskLevel:            "low",
+		Example:              `{"tool": "inspect_storage_diagnostics", "arguments": {"namespace": "default", "topN": 20}}`,
+		InputSchema: &InputSchema{Type: "object", Properties: map[string]*ParameterSchema{
+			"context":   {Type: "string", Description: "Kubernetes context 名称，不指定则使用当前 context"},
+			"namespace": {Type: "string", Description: "命名空间，建议显式指定"},
+			"topN":      {Type: "integer", Description: "返回 findings 上限，默认 20", Default: 20},
+		}, Required: []string{}},
+		Handler: InspectStorageDiagnostics,
+	}); err != nil {
+		return err
+	}
 	return nil
 }
