@@ -251,5 +251,23 @@ func RegisterInspectTools(registry *ToolRegistry) error {
 	}); err != nil {
 		return err
 	}
+
+	// 注册 inspect_namespace_health 工具
+	if err := registry.RegisterTool(&Tool{
+		Name:                 "inspect_namespace_health",
+		Description:          "命名空间健康聚合，只读汇总该 namespace 内异常 Pod、无后端 Service、Pending PVC、Warning Events 并给出 Top findings。支持 namespace、topN",
+		Category:             CategoryQuery,
+		RequiresConfirmation: false,
+		RiskLevel:            "low",
+		Example:              `{"tool": "inspect_namespace_health", "arguments": {"namespace": "default", "topN": 20}}`,
+		InputSchema: &InputSchema{Type: "object", Properties: map[string]*ParameterSchema{
+			"context":   {Type: "string", Description: "Kubernetes context 名称，不指定则使用当前 context"},
+			"namespace": {Type: "string", Description: "命名空间，必填或使用当前 context 默认 namespace"},
+			"topN":      {Type: "integer", Description: "返回 findings 上限，默认 20", Default: 20},
+		}, Required: []string{}},
+		Handler: InspectNamespaceHealth,
+	}); err != nil {
+		return err
+	}
 	return nil
 }
