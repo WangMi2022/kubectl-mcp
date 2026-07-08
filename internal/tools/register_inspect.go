@@ -149,5 +149,28 @@ func RegisterInspectTools(registry *ToolRegistry) error {
 		return err
 	}
 
+	// 注册 inspect_workload_references 工具
+	if err := registry.RegisterTool(&Tool{
+		Name:                 "inspect_workload_references",
+		Description:          "工作负载引用一致性巡检，检查 StatefulSet serviceName、Service selector/Endpoints、Ingress backend、HPA scaleTargetRef、PDB selector 等跨资源引用是否缺失或不一致。只读诊断工具",
+		Category:             CategoryQuery,
+		RequiresConfirmation: false,
+		RiskLevel:            "low",
+		Example:              `{"tool": "inspect_workload_references", "arguments": {"namespace": "middleware", "includeIngress": true, "includeHPA": true, "includePDB": true}}`,
+		InputSchema: &InputSchema{
+			Type: "object",
+			Properties: map[string]*ParameterSchema{
+				"context":        {Type: "string", Description: "Kubernetes context 名称，不指定则使用当前 context"},
+				"namespace":      {Type: "string", Description: "命名空间，不指定则检查所有命名空间"},
+				"includeIngress": {Type: "boolean", Description: "是否检查 Ingress backend 引用，默认 true", Default: true},
+				"includeHPA":     {Type: "boolean", Description: "是否检查 HPA scaleTargetRef 引用，默认 true", Default: true},
+				"includePDB":     {Type: "boolean", Description: "是否检查 PDB selector 引用，默认 true", Default: true},
+			},
+			Required: []string{},
+		},
+		Handler: InspectWorkloadReferences,
+	}); err != nil {
+		return err
+	}
 	return nil
 }
