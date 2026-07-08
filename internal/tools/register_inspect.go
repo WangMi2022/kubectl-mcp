@@ -233,5 +233,23 @@ func RegisterInspectTools(registry *ToolRegistry) error {
 	}); err != nil {
 		return err
 	}
+
+	// 注册 inspect_node_pressure 工具
+	if err := registry.RegisterTool(&Tool{
+		Name:                 "inspect_node_pressure",
+		Description:          "节点压力诊断，只读检查 Memory/Disk/PIDPressure、allocatable vs requests、节点上异常/高重启 Pod、节点事件。支持 nodeName、topN",
+		Category:             CategoryQuery,
+		RequiresConfirmation: false,
+		RiskLevel:            "low",
+		Example:              `{"tool": "inspect_node_pressure", "arguments": {"nodeName": "node-1", "topN": 20}}`,
+		InputSchema: &InputSchema{Type: "object", Properties: map[string]*ParameterSchema{
+			"context":  {Type: "string", Description: "Kubernetes context 名称，不指定则使用当前 context"},
+			"nodeName": {Type: "string", Description: "节点名称；不指定则扫描所有节点"},
+			"topN":     {Type: "integer", Description: "返回 findings 上限，默认 20", Default: 20},
+		}, Required: []string{}},
+		Handler: InspectNodePressure,
+	}); err != nil {
+		return err
+	}
 	return nil
 }
