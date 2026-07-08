@@ -441,7 +441,7 @@ func RegisterQueryTools(registry *ToolRegistry) error {
 	// 注册 get_pod_logs 工具
 	if err := registry.RegisterTool(&Tool{
 		Name:                 "get_pod_logs",
-		Description:          "获取 Pod 的日志，支持指定容器、行数限制、查看前一个容器的日志",
+		Description:          "获取 Pod 的日志，支持指定容器、tailLines 行数限制、previous 崩溃前日志、since/sinceMinutes 时间窗口",
 		Category:             CategoryQuery,
 		RequiresConfirmation: false,
 		RiskLevel:            "low",
@@ -475,6 +475,14 @@ func RegisterQueryTools(registry *ToolRegistry) error {
 					Type:        "boolean",
 					Description: "是否查看前一个容器的日志（容器重启后）",
 					Default:     false,
+				},
+				"since": {
+					Type:        "string",
+					Description: "仅返回该 RFC3339 时间之后的日志，如 2026-07-08T08:00:00Z；优先级高于 sinceMinutes",
+				},
+				"sinceMinutes": {
+					Type:        "integer",
+					Description: "仅返回最近多少分钟日志",
 				},
 			},
 			Required: []string{"name"},

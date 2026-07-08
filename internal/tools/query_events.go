@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"kubectl-mcp/internal/k8s"
+	"time"
 
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -67,6 +68,27 @@ func GetEvents(ctx context.Context, args map[string]interface{}, k8sClient *k8s.
 	return result, nil
 }
 
+func buildPodLogOptions(args map[string]interface{}, tailLines int64, previous bool, container string) (*corev1.PodLogOptions, error) {
+	podLogOptions := &corev1.PodLogOptions{TailLines: &tailLines, Previous: previous}
+	if container != "" {
+		podLogOptions.Container = container
+	}
+	if sinceMinutes := intArg(args, "sinceMinutes", 0); sinceMinutes > 0 {
+		seconds := int64(sinceMinutes) * 60
+		podLogOptions.SinceSeconds = &seconds
+	}
+	if since := stringArg(args, "since", ""); since != "" {
+		parsed, err := time.Parse(time.RFC3339, since)
+		if err != nil {
+			return nil, fmt.Errorf("since 必须是 RFC3339 时间，例如 2026-07-08T08:00:00Z: %w", err)
+		}
+		metav1Since := metav1.NewTime(parsed)
+		podLogOptions.SinceTime = &metav1Since
+		podLogOptions.SinceSeconds = nil
+	}
+	return podLogOptions, nil
+}
+
 // GetPodLogs 获取 Pod 日志
 func GetPodLogs(ctx context.Context, args map[string]interface{}, k8sClient *k8s.K8SClientManager) (interface{}, error) {
 	contextName, namespace, _ := getContextAndNamespace(args, k8sClient)
@@ -100,13 +122,9 @@ func GetPodLogs(ctx context.Context, args map[string]interface{}, k8sClient *k8s
 		return nil, err
 	}
 
-	podLogOptions := &corev1.PodLogOptions{
-		TailLines: &tailLines,
-		Previous:  previous,
-	}
-
-	if container != "" {
-		podLogOptions.Container = container
+	podLogOptions, err := buildPodLogOptions(args, tailLines, previous, container)
+	if err != nil {
+		return nil, err
 	}
 
 	req := clientset.Clientset.CoreV1().Pods(namespace).GetLogs(podName, podLogOptions)
