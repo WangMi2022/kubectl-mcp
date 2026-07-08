@@ -80,6 +80,43 @@ func RegisterInspectTools(registry *ToolRegistry) error {
 		return err
 	}
 
+	// 注册 inspect_event_root_causes 工具
+	if err := registry.RegisterTool(&Tool{
+		Name:                 "inspect_event_root_causes",
+		Description:          "事件根因巡检，分析 Warning Events 并按 reason+involvedObject 聚合为结构化 findings，识别探针失败、调度失败、挂载失败、镜像拉取失败、HPA 目标缺失等根因。只读诊断工具，适合作为 K8S 深度巡检事件根因分析步骤",
+		Category:             CategoryQuery,
+		RequiresConfirmation: false,
+		RiskLevel:            "low",
+		Example:              `{"tool": "inspect_event_root_causes", "arguments": {"namespace": "default", "limit": 20, "sinceMinutes": 1440}}`,
+		InputSchema: &InputSchema{
+			Type: "object",
+			Properties: map[string]*ParameterSchema{
+				"context": {
+					Type:        "string",
+					Description: "Kubernetes context 名称，不指定则使用当前 context",
+				},
+				"namespace": {
+					Type:        "string",
+					Description: "命名空间，不指定则查询所有命名空间",
+				},
+				"limit": {
+					Type:        "integer",
+					Description: "返回根因数量上限，默认 100",
+					Default:     100,
+				},
+				"sinceMinutes": {
+					Type:        "integer",
+					Description: "只分析最近多少分钟内的 Warning Events，默认 1440",
+					Default:     1440,
+				},
+			},
+			Required: []string{},
+		},
+		Handler: InspectEventRootCauses,
+	}); err != nil {
+		return err
+	}
+
 	// 注册 inspect_events 工具
 	if err := registry.RegisterTool(&Tool{
 		Name:                 "inspect_events",
