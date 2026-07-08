@@ -798,5 +798,11 @@ func RegisterQueryTools(registry *ToolRegistry) error {
 		return err
 	}
 
+
+	// 注册 top_pods 工具
+	if err := registry.RegisterTool(&Tool{Name: "top_pods", Description: "查看 Pod 实时资源用量排行（metrics.k8s.io），支持 namespace、limit；metrics API 不可用时返回明确 unavailable 降级结果", Category: CategoryQuery, RequiresConfirmation: false, RiskLevel: "low", Example: `{"tool": "top_pods", "arguments": {"namespace": "default", "limit": 10}}`, InputSchema: &InputSchema{Type: "object", Properties: map[string]*ParameterSchema{"context": {Type: "string", Description: "Kubernetes context 名称，不指定则使用当前 context"}, "namespace": {Type: "string", Description: "命名空间，不指定则使用当前 context 默认 namespace"}, "limit": {Type: "integer", Description: "返回数量，默认 20", Default: 20}}, Required: []string{}}, Handler: TopPods}); err != nil { return err }
+
+	// 注册 top_nodes 工具
+	if err := registry.RegisterTool(&Tool{Name: "top_nodes", Description: "查看 Node 实时资源用量排行（metrics.k8s.io），支持 limit；metrics API 不可用时返回明确 unavailable 降级结果", Category: CategoryQuery, RequiresConfirmation: false, RiskLevel: "low", Example: `{"tool": "top_nodes", "arguments": {"limit": 10}}`, InputSchema: &InputSchema{Type: "object", Properties: map[string]*ParameterSchema{"context": {Type: "string", Description: "Kubernetes context 名称，不指定则使用当前 context"}, "limit": {Type: "integer", Description: "返回数量，默认 20", Default: 20}}, Required: []string{}}, Handler: TopNodes}); err != nil { return err }
 	return nil
 }
