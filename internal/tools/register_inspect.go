@@ -196,5 +196,24 @@ func RegisterInspectTools(registry *ToolRegistry) error {
 	}); err != nil {
 		return err
 	}
+
+	// 注册 inspect_service_connectivity 工具
+	if err := registry.RegisterTool(&Tool{
+		Name:                 "inspect_service_connectivity",
+		Description:          "Service 连通性诊断，只读检查 selector 是否匹配 Pod、Endpoints 是否为空、targetPort 是否匹配容器端口、后端 Pod 是否 Ready。支持 namespace、serviceName、topN",
+		Category:             CategoryQuery,
+		RequiresConfirmation: false,
+		RiskLevel:            "low",
+		Example:              `{"tool": "inspect_service_connectivity", "arguments": {"namespace": "default", "serviceName": "api"}}`,
+		InputSchema: &InputSchema{Type: "object", Properties: map[string]*ParameterSchema{
+			"context":     {Type: "string", Description: "Kubernetes context 名称，不指定则使用当前 context"},
+			"namespace":   {Type: "string", Description: "命名空间，建议显式指定"},
+			"serviceName": {Type: "string", Description: "Service 名称；不指定则扫描 namespace 内所有 Service"},
+			"topN":        {Type: "integer", Description: "返回 findings 上限，默认 20", Default: 20},
+		}, Required: []string{}},
+		Handler: InspectServiceConnectivity,
+	}); err != nil {
+		return err
+	}
 	return nil
 }
