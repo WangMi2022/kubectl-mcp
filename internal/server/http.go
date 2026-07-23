@@ -42,6 +42,41 @@ type HTTPServerConfig struct {
 	Metrics      *audit.MetricsCollector // 性能指标收集器
 }
 
+// cachedToolCallResult 只保存可跨请求复用的查询结果。
+// requestId、context 和 duration 属于单次请求 envelope，不能进入缓存。
+type cachedToolCallResult struct {
+	Data       interface{}
+	Content    []mcp.ContentItem
+	Pagination *mcp.PaginationInfo
+}
+
+func newCachedToolCallResult(response *mcp.ToolCallResponse) cachedToolCallResult {
+	result := cachedToolCallResult{
+		Data:    response.Data,
+		Content: append([]mcp.ContentItem(nil), response.Content...),
+	}
+	if response.Pagination != nil {
+		pagination := *response.Pagination
+		result.Pagination = &pagination
+	}
+	return result
+}
+
+func (r cachedToolCallResult) response(requestID, contextName string) *mcp.ToolCallResponse {
+	response := &mcp.ToolCallResponse{
+		Success:   true,
+		Data:      r.Data,
+		Content:   append([]mcp.ContentItem(nil), r.Content...),
+		RequestID: requestID,
+		Context:   contextName,
+	}
+	if r.Pagination != nil {
+		pagination := *r.Pagination
+		response.Pagination = &pagination
+	}
+	return response
+}
+
 // NewHTTPServer 创建新的 HTTP 服务器
 // 参数:
 //   - cfg: HTTP 服务器配置
@@ -226,19 +261,20 @@ func (s *HTTPServer) handleToolCall(c *gin.Context) {
 	ctx := c.Request.Context()
 
 	// 检查缓存（仅对可缓存的查询工具）
+	cacheKey := ""
 	if s.queryCache != nil && IsCacheable(toolName) {
-		contextName := ""
-		if ctx, ok := req.Arguments["context"].(string); ok {
-			contextName = ctx
-		}
-		cacheKey := s.queryCache.GenerateKey(toolName, req.Arguments, contextName)
+		cacheKey = s.toolCallCacheKey(&req)
 		if cachedData, found := s.queryCache.Get(cacheKey); found {
-			// 缓存命中
-			if s.metrics != nil {
-				s.metrics.RecordCacheHit()
+			if cachedResult, ok := cachedData.(cachedToolCallResult); ok {
+				// 命中时使用当前请求的 correlation envelope，绝不回放旧 requestId。
+				if s.metrics != nil {
+					s.metrics.RecordCacheHit()
+				}
+				c.JSON(http.StatusOK, cachedResult.response(req.RequestID, s.toolCallResponseContext(&req)))
+				return
 			}
-			c.JSON(http.StatusOK, cachedData)
-			return
+			// 未知缓存类型 fail closed 为 miss，避免返回无法重新绑定的旧 envelope。
+			s.queryCache.Delete(cacheKey)
 		}
 		// 缓存未命中
 		if s.metrics != nil {
@@ -258,12 +294,10 @@ func (s *HTTPServer) handleToolCall(c *gin.Context) {
 
 	// 缓存成功的查询结果
 	if s.queryCache != nil && response.Success && IsCacheable(toolName) {
-		contextName := ""
-		if ctx, ok := req.Arguments["context"].(string); ok {
-			contextName = ctx
+		if cacheKey == "" {
+			cacheKey = s.toolCallCacheKey(&req)
 		}
-		cacheKey := s.queryCache.GenerateKey(toolName, req.Arguments, contextName)
-		s.queryCache.Set(cacheKey, response)
+		s.queryCache.Set(cacheKey, newCachedToolCallResult(response))
 	}
 
 	// 如果是修改操作，失效相关缓存
@@ -602,6 +636,29 @@ func (s *HTTPServer) getHTTPStatusFromError(errInfo *mcp.ErrorInfo) int {
 	default:
 		return http.StatusInternalServerError
 	}
+}
+
+func (s *HTTPServer) toolCallCacheKey(req *mcp.ToolCallRequest) string {
+	args := make(map[string]interface{}, len(req.Arguments)+3)
+	for name, value := range req.Arguments {
+		args[name] = value
+	}
+	if req.Verbosity != "" {
+		args["_verbosity"] = string(req.Verbosity)
+	}
+	if req.Pagination != nil {
+		normalized := mcp.NormalizePagination(req.Pagination)
+		args["_page"] = normalized.Page
+		args["_pageSize"] = normalized.PageSize
+	}
+	return s.queryCache.GenerateKey(req.GetToolName(), args, s.toolCallResponseContext(req))
+}
+
+func (s *HTTPServer) toolCallResponseContext(req *mcp.ToolCallRequest) string {
+	if req.Context != "" {
+		return req.Context
+	}
+	return s.mcpHandler.GetK8SManager().GetCurrentContext()
 }
 
 // ========== 服务器生命周期 ==========

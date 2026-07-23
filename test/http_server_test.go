@@ -53,6 +53,21 @@ func setupHTTPServer(t *testing.T, cfg *config.ServerConfig) (*server.HTTPServer
 	if err := toolRegistry.RegisterTool(testTool); err != nil {
 		t.Fatalf("注册测试工具失败: %v", err)
 	}
+	cacheableTool := &tools.Tool{
+		Name:        "get_namespaces",
+		Description: "测试可缓存查询工具",
+		Category:    tools.CategoryQuery,
+		Handler: func(ctx context.Context, args map[string]interface{}, k8sClient *k8s.K8SClientManager) (interface{}, error) {
+			return map[string]interface{}{"items": []string{"default"}}, nil
+		},
+		InputSchema: &tools.InputSchema{
+			Type:       "object",
+			Properties: map[string]*tools.ParameterSchema{},
+		},
+	}
+	if err := toolRegistry.RegisterTool(cacheableTool); err != nil {
+		t.Fatalf("注册可缓存测试工具失败: %v", err)
+	}
 
 	// 创建审计日志器
 	auditLogger, _ := audit.NewAuditLogger(&audit.LoggerConfig{
@@ -135,6 +150,47 @@ func TestHTTPHandleToolCall_ValidRequest(t *testing.T) {
 
 	if response.RequestID != "test-request-1" {
 		t.Errorf("期望 RequestID 为 'test-request-1'，实际为 '%s'", response.RequestID)
+	}
+}
+
+func TestHTTPHandleToolCall_CacheHitUsesCurrentRequestID(t *testing.T) {
+	httpServer, _ := setupHTTPServer(t, nil)
+
+	invoke := func(requestID string) mcp.ToolCallResponse {
+		t.Helper()
+		body, err := json.Marshal(mcp.ToolCallRequest{
+			Tool:      "get_namespaces",
+			Arguments: map[string]interface{}{},
+			RequestID: requestID,
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		req := httptest.NewRequest(http.MethodPost, "/tool", bytes.NewReader(body))
+		req.Header.Set("Content-Type", "application/json")
+		w := httptest.NewRecorder()
+		httpServer.GetRouter().ServeHTTP(w, req)
+		if w.Code != http.StatusOK {
+			t.Fatalf("期望状态码为 200，实际为 %d: %s", w.Code, w.Body.String())
+		}
+		var response mcp.ToolCallResponse
+		if err := json.Unmarshal(w.Body.Bytes(), &response); err != nil {
+			t.Fatalf("解析响应失败: %v", err)
+		}
+		return response
+	}
+
+	first := invoke("cache-request-1")
+	second := invoke("cache-request-2")
+	if first.RequestID != "cache-request-1" {
+		t.Fatalf("首次响应 requestId 不匹配: %q", first.RequestID)
+	}
+	if second.RequestID != "cache-request-2" {
+		t.Fatalf("cache hit 回放了旧 requestId: %q", second.RequestID)
+	}
+	stats := httpServer.GetCache().Stats()
+	if stats.Hits != 1 || stats.Misses != 1 {
+		t.Fatalf("缓存统计不符合一次 miss/一次 hit: %+v", stats)
 	}
 }
 
